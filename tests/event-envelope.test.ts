@@ -623,8 +623,10 @@ describe('tenant notice envelope', { concurrency: 1 }, () => {
     const listed = script.match(/for m in ([^;]+);do/);
     assert.ok(listed);
     const files = listed[1].trim().split(/\s+/);
-    assert.equal(files.at(-2), '020-tool-manifest.sql');
-    assert.equal(files.at(-1), '021-vera-profiles.sql');
+    // Additive E2 schema follows the unchanged020/021 migrations.
+    assert.equal(files.at(-3), '020-tool-manifest.sql');
+    assert.equal(files.at(-2), '021-vera-profiles.sql');
+    assert.equal(files.at(-1), '022-e2-derived-proposals.sql');
     assert.equal(
       files.filter((file) => file === '021-vera-profiles.sql').length,
       1,
