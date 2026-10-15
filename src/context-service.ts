@@ -1,3 +1,6 @@
+import { E2Storage, isE2, withdrawE2 } from './e2-storage.js';
+import type { E2RecoveryGate } from './e2-recovery.js';
+import type { E2AdmissionInput } from './e2-ingress.js';
 import type pg from 'pg';
 import { tx, canonical, sha, append } from './db.js';
 import { lockContextHead } from './context-lock.js';
@@ -123,7 +126,54 @@ function contextDigest(x: Record<string, any>) {
   );
 }
 export class ContextService {
-  constructor(private db: pg.Pool) {}
+  private e2: E2Storage;
+  constructor(
+    private db: pg.Pool,
+    e2Gate?: E2RecoveryGate,
+  ) {
+    this.e2 = new E2Storage(
+      db,
+      {
+        digest: contextDigest,
+        producer: recordedProducer,
+        insert: (c, v) => this.insertVersion(c, v),
+      },
+      e2Gate,
+    );
+  }
+  // Internal trusted-ingress API: only the private observation registry can
+  // authorize a proposal; a structurally typed actor/input is not a credential.
+  async admitDerivedProposal(actor: VerifiedIdentity, input: E2AdmissionInput) {
+    return this.e2.admit(actor, input);
+  }
+  async inspectDerivedProposal(
+    actor: VerifiedIdentity,
+    result: ContextReference,
+  ) {
+    return this.e2.inspect(actor, result);
+  }
+  private async insertVersion(c: pg.PoolClient, v: Record<string, any>) {
+    const digest = contextDigest(v);
+    await c.query(
+      'INSERT INTO ct.context_versions(tenant,id,principal,version,payload,digest,source,observed_at,expires) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [
+        v.tenant,
+        v.id,
+        v.principal,
+        v.version,
+        v.payload,
+        digest,
+        v.source,
+        v.observed_at,
+        v.expires,
+      ],
+    );
+    await c.query(
+      'UPDATE ct.context_heads SET version=$3,quarantined=true,revision=revision+1 WHERE tenant=$1 AND id=$2',
+      [v.tenant, v.id, v.version],
+    );
+    return digest;
+  }
   async ingest(actor: VerifiedIdentity, x: ContextInput) {
     // actor must come from the existing trusted verifier ingress. Its TypeScript
     // shape is not authentication of a deserialized or caller-constructed object.
@@ -206,25 +256,19 @@ export class ContextService {
         observed_at: now,
         expires: new Date(+now + x.ttlSeconds * 1000),
       };
-      const digest = contextDigest(v);
-      await c.query(
-        'INSERT INTO ct.context_versions(tenant,id,principal,version,payload,digest,source,observed_at,expires) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-        [
-          v.tenant,
-          v.id,
-          v.principal,
-          v.version,
-          v.payload,
-          digest,
-          v.source,
-          v.observed_at,
-          v.expires,
-        ],
-      );
-      await c.query(
-        'UPDATE ct.context_heads SET version=$3,quarantined=true,revision=revision+1 WHERE tenant=$1 AND id=$2',
-        [i.tenant, x.id, v.version],
-      );
+      if (old && old.version > 0) {
+        const previous = (
+          await c.query(
+            'SELECT source FROM ct.context_versions WHERE tenant=$1 AND id=$2 AND version=$3',
+            [i.tenant, x.id, old.version],
+          )
+        ).rows[0];
+        if (await isE2(c, i.tenant, x.id, previous?.source))
+          throw Error('E2 unavailable');
+      }
+      const digest = await this.insertVersion(c, v);
+      if (old && old.version > 0)
+        await withdrawE2(c, i.tenant, x.id, old.version, 'SOURCE_REPLACED');
       await append(c, i.tenant, 'CONTEXT_INGESTED', {
         id: x.id,
         version: v.version,
@@ -248,10 +292,12 @@ export class ContextService {
       await lockContextHead(c, i.tenant, headId);
       const r = (
         await c.query(
-          'SELECT h.*,v.digest,v.expires FROM ct.context_heads h JOIN ct.context_versions v ON v.tenant=h.tenant AND v.id=h.id AND v.version=h.version WHERE h.tenant=$1 AND h.id=$2',
+          'SELECT h.*,v.digest,v.expires,v.source FROM ct.context_heads h JOIN ct.context_versions v ON v.tenant=h.tenant AND v.id=h.id AND v.version=h.version WHERE h.tenant=$1 AND h.id=$2',
           [i.tenant, headId],
         )
       ).rows[0];
+      if (await isE2(c, i.tenant, headId, r?.source))
+        throw Error('E2 unavailable');
       if (
         !r ||
         r.deleted ||
@@ -319,6 +365,8 @@ export class ContextService {
           [i.tenant, headId],
         )
       ).rows[0];
+      if (await isE2(c, i.tenant, headId, r?.source))
+        return { error: 'E2 unavailable' };
       const now = +new Date(
         (await c.query('SELECT clock_timestamp() t')).rows[0].t,
       );
@@ -393,6 +441,7 @@ export class ContextService {
           [i.tenant, identifier(id)],
         )
       ).rows[0];
+      if (await isE2(c, i.tenant, id, r?.source)) throw Error('E2 unavailable');
       if (!r || r.deleted || r.erased_at || contextDigest(r) !== r.digest)
         throw Error('review data unavailable/corrupt');
       return {
@@ -421,6 +470,13 @@ export class ContextService {
     id: string,
     owner: string,
   ) {
+    const head = (
+      await c.query(
+        'SELECT version FROM ct.context_heads WHERE tenant=$1 AND id=$2',
+        [tenant, id],
+      )
+    ).rows[0];
+    if (head) await withdrawE2(c, tenant, id, head.version, 'SOURCE_DELETED');
     await c.query(
       'UPDATE ct.context_versions SET payload=NULL,erased_at=clock_timestamp() WHERE tenant=$1 AND id=$2 AND erased_at IS NULL',
       [tenant, id],
@@ -464,6 +520,14 @@ export class ContextService {
         ).rows[0];
         if (!version || version.erased_at || version.expired !== true)
           return false;
+        await withdrawE2(
+          c,
+          i.tenant,
+          candidate.id,
+          candidate.version,
+          'SOURCE_EXPIRED',
+          'RESULT_EXPIRED',
+        );
         await this.eraseLocked(c, i.tenant, candidate.id, i.id);
         return true;
       });
