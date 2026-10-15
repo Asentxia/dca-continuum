@@ -4,6 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${NEXUS_TOOLCHAIN_BIN:?Preinstall the pinned Rust 1.94.0 toolchain}"
 : "${CARGO_HOME:?Prefetch the reviewed Cargo.lock dependency closure explicitly}"
+# Provenance parsing uses the Python3.11+ stdlib TOML parser; do not replace system Python.
+"${NEXUS_PYTHON:-python3}" -c 'import sys; assert sys.version_info >= (3,11), "Set NEXUS_PYTHON to a preinstalled Python3.11+ interpreter"'
 mkdir -p .artifacts/implementation/native
 bash tools/nexus-build.sh > .artifacts/implementation/native/NEXUS-BUILD.log 2>&1
 NEXUS_NATIVE_TEST_ONLY=yes bash tools/nexus-test.sh > .artifacts/implementation/native/NEXUS-NATIVE.log 2>&1

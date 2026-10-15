@@ -10,5 +10,5 @@ mkdir -p "$CARGO_TARGET_DIR"
 env -i HOME="$HOME" PATH="$NEXUS_TOOLCHAIN_BIN:/usr/bin:/bin" CARGO_HOME="$CARGO_HOME" \
   CARGO_TARGET_DIR="$CARGO_TARGET_DIR" RUSTC="$NEXUS_TOOLCHAIN_BIN/rustc" \
   "$NEXUS_TOOLCHAIN_BIN/cargo" build --offline --locked --manifest-path tools/nexus-native/Cargo.toml -j 2
-python3 tools/nexus-native-fingerprint.py record "$CARGO_TARGET_DIR/debug/continuum-nexus-bridge" "$CARGO_TARGET_DIR/nexus-build.json"
+"${NEXUS_PYTHON:-python3}" tools/nexus-native-fingerprint.py record "$CARGO_TARGET_DIR/debug/continuum-nexus-bridge" "$CARGO_TARGET_DIR/nexus-build.json"
 printf 'Prebuilt runtime: %s/debug/continuum-nexus-bridge\n' "$CARGO_TARGET_DIR"

@@ -67,7 +67,7 @@ security acceptance remain separate. No new overall product license is chosen.
 
 Retain the existing [safe local launcher](../LOCAL-TEST-LAUNCHER.md) and
 [canonical testing rules](../TESTING.md). Backend Node24.14.1, frontend Node22.23.3,
-PostgreSQL17 tools/server (this sprint used17.10), Python3, OpenSSL, Chromium,
+PostgreSQL17 tools/server (this sprint used17.10), Python3.11+ for native provenance, OpenSSL, Chromium,
 Linux namespaces and existing restricted fixture helper are required. Rust1.94.0 is
 an additional **local build dependency**, not a runtime installer. Cargo packages
 are exact/checksummed in `tools/nexus-native/Cargo.lock`; AEON has no registry closure.
@@ -81,6 +81,8 @@ cluster/helper or modify global runtimes as a shortcut. Never use live credentia
 # Actual toolchain binaries, not rustup proxy symlinks:
 export NEXUS_TOOLCHAIN_BIN="$(dirname "$(rustup which --toolchain 1.94.0 rustc)")"
 export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+# If system python3 is older, set NEXUS_PYTHON to a trusted preinstalled3.11+ interpreter.
+export NEXUS_PYTHON="$(command -v python3)"
 "$NEXUS_TOOLCHAIN_BIN/rustc" --version
 # Explicit dependency-fetch phase; not called by product execution or offline build:
 "$NEXUS_TOOLCHAIN_BIN/cargo" fetch --locked --manifest-path tools/nexus-native/Cargo.toml

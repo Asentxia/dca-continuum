@@ -8,8 +8,8 @@ cd "$(dirname "$0")/.."
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/.artifacts/nexus-target}"
 export NEXUS_NATIVE_BINARY="${NEXUS_NATIVE_BINARY:-$CARGO_TARGET_DIR/debug/continuum-nexus-bridge}"
 test -x "$NEXUS_NATIVE_BINARY" || { echo 'Run explicit tools/nexus-build.sh first' >&2; exit 1; }
-python3 tools/nexus-native-fingerprint.py verify "$NEXUS_NATIVE_BINARY" "$CARGO_TARGET_DIR/nexus-build.json"
-python3 tools/nexus-verify-provenance.py
+"${NEXUS_PYTHON:-python3}" tools/nexus-native-fingerprint.py verify "$NEXUS_NATIVE_BINARY" "$CARGO_TARGET_DIR/nexus-build.json"
+"${NEXUS_PYTHON:-python3}" tools/nexus-verify-provenance.py
 mkdir -p .artifacts/nexus
 cargo_local() {
   env -i HOME="$HOME" PATH="$NEXUS_TOOLCHAIN_BIN:/usr/bin:/bin" CARGO_HOME="$CARGO_HOME" \
@@ -29,4 +29,4 @@ for f in tests/nexus/fixtures/*.wasm; do cmp "$f" "$fixtures/$(basename "$f")"; 
 if [ "${NEXUS_NATIVE_TEST_ONLY:-no}" = yes ]; then exit 0; fi
 node node_modules/typescript/bin/tsc --pretty false
 node --test dist/tests/nexus/local.test.js dist/tests/bounded-computation-contract.test.js
-python3 tools/nexus-fingerprint.py > .artifacts/nexus/source-fingerprint.json
+"${NEXUS_PYTHON:-python3}" tools/nexus-fingerprint.py > .artifacts/nexus/source-fingerprint.json
