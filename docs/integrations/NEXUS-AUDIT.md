@@ -39,13 +39,14 @@ or used to build the broad donor package. No server/proxy/daemon/WASI source cop
 
 ## Dependency review before reuse
 
-Minimal independent manifest: Wasmtime exactly 45.0.3 (same runtime version as
-pin), default-features=false, only cranelift/runtime/std; serde 1.0.228,
+Initial donor-matching dependency 45.0.3 was explicitly downgraded after the
+seven-advisory scan; see `NEXUS-SECURITY-REMEDIATION.md`. Current minimal independent
+manifest: Wasmtime exactly **36.0.18** (supported patched LTS; donor source pin unchanged), default-features=false, only cranelift/runtime/std; serde 1.0.228,
 serde_json 1.0.149; WAT test parser 1.245.1. Rust 1.94.0 isolated install,
-MSRV for Wasmtime 1.93.0. Full registry closure pinned with checksums in the new
+MSRV for Wasmtime 36.0.18 is 1.86.0. Full registry closure pinned with checksums in the new
 Cargo.lock; no git dependencies and no donor optional dependency/server feature.
-`NEXUS-PROVENANCE.json` inventories all 103 registry packages, their licenses,
-license-file hashes and build-script hashes (104 packages including the bridge).
+`NEXUS-PROVENANCE.json` inventories all 104 registry packages, their licenses,
+license-file hashes and build-script hashes (105 packages including the bridge).
 
 Declared licenses: MIT/Apache alternatives, Apache with LLVM exception,
 Zlib (foldhash), optional BSD/Unlicense alternatives, Unicode-3.0 conjunction
@@ -55,20 +56,22 @@ expression and source headers identify licensing, with matching license texts
 retained from the sibling wasmtime/wasmparser package. Unicode license is retained
 separately. Notices are not a certification of redistribution completeness.
 
-The 25 build scripts were screened for process/network/filesystem behavior.
+The 31 build scripts were screened for process/network/filesystem behavior.
 Observed: Rust compiler/version/feature probes; Cranelift code/assembler/ISLE
 source generation under OUT_DIR; Cranelift git rev-parse HEAD metadata probe;
 cc compilation of Wasmtime runtime helpers (fiber Windows C and debug helper
-branches not active on this Linux profile); target/platform probes. No download,
+branches not active on this Linux profile); target/platform probes and Windows-only
+local link-search directives. No download,
 HTTP client, socket or credential-fetch action in reviewed build scripts. Build
 is explicit, uses locked/offline Cargo after a separate dependency fetch; runtime
 never invokes Cargo, shell, registry, server or provider. Build tools remain
 trusted native supply-chain inputs, not sandboxed guest execution.
 
 Limitations: this is a targeted integration/dependency-license/build-surface
-review, not a full security audit of all transitive compiler/runtime code. No
-current vulnerability-database clearance, sandbox-escape certification, hostile
-multi-tenant service qualification or production release approval is claimed.
+review, not a full security audit of all transitive compiler/runtime code. Point-in-time full unfiltered RustSec scan is clean against DB
+`edb58f5974b83eb8302332821cb6d389777aa351`; this is not native-engine escape
+certification, a guarantee against future advisories, hostile multi-tenant service
+qualification or production release approval.
 Native engine bugs remain a risk: separate application workspace isolation and
 Effect Controller authority are unchanged and independently required. Local
 results create no grant, approval, capability, admitted fact or external success.

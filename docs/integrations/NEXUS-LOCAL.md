@@ -121,3 +121,26 @@ source/notice, all adapter/test/fixture bytes and audit docs, excluding generate
 targets. Final fingerprint is written under `.artifacts/nexus` by the focused suite.
 Full existing canonical DB/HA/browser suite is coordinator-owned, NOT RUN here.
 No DB reset or main-environment helper/toolchain change is part of this work.
+
+## Patched dependency and explicit audit reproduction
+
+The inherited 45.0.3 dependency was explicitly downgraded to supported patched LTS
+**36.0.18**, with unchanged donor source, native bounds/ABI and Rust 1.94.0. See
+`NEXUS-SECURITY-REMEDIATION.md` for all seven prior advisory records, exposure
+assessments, dependency/license review and final unfiltered clean snapshot scan.
+The full retained notice bundle is not a package/SPDX-only index.
+
+A separately installed cargo-audit **0.22.2** and reviewed advisory DB snapshot are
+required for explicit scan reproduction (never invoked by runtime/build):
+
+```bash
+python3 tools/nexus-audit.py "$NEXUS_AUDIT_BIN" "$NEXUS_ADVISORY_DB" .artifacts/nexus/security-audit
+```
+
+This helper intentionally requires exact snapshot commit
+`edb58f5974b83eb8302332821cb6d389777aa351`, and records before/after DB commit/tree/
+file hashes, full command, raw JSON and exit code. It uses no-fetch, offline mode,
+no ignores or target/severity filters, and denies warnings. It is a reproduction
+helper, **not** a gate claiming future/latest advisory freshness; update/review the
+snapshot separately for a later security decision. Execution remains offline and
+does not build, audit, install tools, access registries or run donor services.
