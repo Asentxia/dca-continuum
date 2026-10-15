@@ -15,10 +15,14 @@ mkdir -p "$OUT/backend" "$OUT/frontend" "$OUT/baseline" "$OUT/browser"
 trap 'printf "Verification stopped at line %s; exit %s. See retained raw evidence.\n" "$LINENO" "$?" > "$OUT/INCOMPLETE.txt"' ERR
 sha256sum qualification/PRODUCTION-GATES.json docs/M1-SAFETY-CONTRACTS.md > "$OUT/FROZEN-INPUTS.sha256"
 python3 tools/canonical-source-digest.py > "$OUT/TESTED-SOURCE.json"
+printf 'Building reviewed native dependencies offline before canonical execution.\n'
+bash tools/offline-native-build.sh > "$OUT/NATIVE-BUILD.log" 2>&1
+export NEXUS_NATIVE_BINARY="${CARGO_TARGET_DIR:-$PWD/.artifacts/nexus-target}/debug/continuum-nexus-bridge"
 printf 'Re-running accepted backend groups, native local HA/PITR and legacy guards.\n'
 npm test > "$OUT/baseline/RUN.log" 2>&1
 cp -a .artifacts/implementation/final "$OUT/baseline/suites"
 cp -a .artifacts/implementation/dr-lab "$OUT/baseline/dr-lab"
+cp -a .artifacts/implementation/native "$OUT/baseline/native"
 cp .artifacts/implementation/FINAL-SUMMARY.json "$OUT/baseline/SUMMARY.json"
 # Import evidence remains historical. Fresh results are isolated above.
 true # Results are ignored artifacts, not tracked source.

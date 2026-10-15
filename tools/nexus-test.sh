@@ -25,6 +25,8 @@ env -i HOME="$HOME" PATH="$NEXUS_TOOLCHAIN_BIN:/usr/bin:/bin" CARGO_HOME="$CARGO
   CARGO_TARGET_DIR="$CARGO_TARGET_DIR" RUSTC="$NEXUS_TOOLCHAIN_BIN/rustc" \
   "$NEXUS_TOOLCHAIN_BIN/cargo" run --offline --locked --manifest-path tools/nexus-native/Cargo.toml --example fixtures -- "$fixtures"
 for f in tests/nexus/fixtures/*.wasm; do cmp "$f" "$fixtures/$(basename "$f")"; done
+# Canonical runs the Node suites once in its measured TAP runner after this native phase.
+if [ "${NEXUS_NATIVE_TEST_ONLY:-no}" = yes ]; then exit 0; fi
 node node_modules/typescript/bin/tsc --pretty false
 node --test dist/tests/nexus/local.test.js dist/tests/bounded-computation-contract.test.js
 python3 tools/nexus-fingerprint.py > .artifacts/nexus/source-fingerprint.json

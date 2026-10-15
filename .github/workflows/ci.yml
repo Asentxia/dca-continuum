@@ -139,6 +139,19 @@ jobs:
           test -x "$CHROMIUM_PATH"
           echo "CT_CHROMIUM_PATH=$CHROMIUM_PATH" >> "$GITHUB_ENV"
 
+      - name: Prepare pinned native integration toolchain and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v rustup
+          rustup toolchain install 1.94.0 --profile minimal
+          NATIVE_BIN="$(dirname "$(rustup which --toolchain 1.94.0 rustc)")"
+          "$NATIVE_BIN/rustc" --version
+          export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+          "$NATIVE_BIN/cargo" fetch --locked --manifest-path tools/nexus-native/Cargo.toml
+          echo "NEXUS_TOOLCHAIN_BIN=$NATIVE_BIN" >> "$GITHUB_ENV"
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+
       - name: Local launcher safety tests (no database mutation)
         run: python3 -m unittest discover -s tools -p test_local_test.py
 

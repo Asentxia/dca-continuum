@@ -45,6 +45,11 @@ run BOUNDED-COMPUTATION dist/tests/bounded-computation-contract.test.js
 run MODEL-PROTOCOL dist/tests/model-protocol.test.js
 run RESTRICTED-MEMORY-PROTOCOL dist/tests/restricted-memory-protocol.test.js
 run RECALL-SERVICE dist/tests/recall-service.test.js
+run E2-DERIVED-PROPOSALS dist/tests/e2-derived-proposals.test.js
+run AEON-OFFLINE dist/tests/aeon/offline.test.js
+run NEXUS-LOCAL dist/tests/nexus/local.test.js
+run CONSOLE-E2-REDACTION dist/tests/console-e2-redaction.test.js
+run OFFLINE-FUNCTIONAL-INTEGRATION dist/tests/offline-functional-integration.test.js
 run TOOL-MANIFEST dist/tests/tool-manifest.test.js
 run EVENT-ENVELOPE dist/tests/event-envelope.test.js
 run TASK-ADMISSION dist/tests/task-admission.test.js
