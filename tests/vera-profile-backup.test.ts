@@ -136,6 +136,25 @@ async function noOtherTargetClients(ownPid: number | null = null) {
   );
 }
 
+// Pool.end() closes the socket, but PostgreSQL may briefly still report the
+// exact owned backend. Wait only for that PID; any other client still refuses.
+async function waitOwnedTargetClientExit(ownedPid: number) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const clients = (
+      await admin.query('SELECT pid FROM pg_stat_activity WHERE datname=$1', [
+        target,
+      ])
+    ).rows;
+    assert.ok(
+      clients.every((row) => Number(row.pid) === ownedPid),
+      'active restore target refused; never terminate another client',
+    );
+    if (clients.length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail('owned restore probe did not disconnect within the bounded wait');
+}
+
 async function knownIdleTarget() {
   await physicalConnection(admin, source);
   const database = (
@@ -156,11 +175,13 @@ async function knownIdleTarget() {
   );
   await noOtherTargetClients();
   const probe = pool('localtest', target);
+  let ownedPid: number | undefined;
   try {
     await physicalConnection(probe, target);
     const pid = Number(
       (await probe.query('SELECT pg_backend_pid() AS pid')).rows[0].pid,
     );
+    ownedPid = pid;
     await noOtherTargetClients(pid);
     const schemas = (
       await probe.query(
@@ -198,6 +219,7 @@ async function knownIdleTarget() {
   } finally {
     await probe.end();
   }
+  if (ownedPid !== undefined) await waitOwnedTargetClientExit(ownedPid);
   await noOtherTargetClients();
 }
 
@@ -463,8 +485,11 @@ describe(
       // A deliberately owned blocker exercises refusal, not forced cleanup.
       // It is closed before any backup/restore command is allowed to proceed.
       const blocker = pool('localtest', target);
+      let blockerPid: number | undefined;
       try {
-        await blocker.query('SELECT pg_backend_pid() AS pid');
+        blockerPid = Number(
+          (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
         await assert.rejects(
           knownIdleTarget(),
           /active restore target refused/,
@@ -472,6 +497,7 @@ describe(
       } finally {
         await blocker.end();
       }
+      if (blockerPid !== undefined) await waitOwnedTargetClientExit(blockerPid);
       await physicalConnection(admin, source);
       await missing(dumpPath);
       await command(
