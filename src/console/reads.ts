@@ -458,7 +458,7 @@ export class ConsoleReads {
     else if (section === 'authority')
       sql = `SELECT * FROM ct.grants WHERE tenant=$1`;
     else if (section === 'context')
-      sql = `SELECT h.*,v.digest,v.source,v.observed_at,v.expires,v.erased_at FROM ct.context_heads h JOIN ct.context_versions v ON v.tenant=h.tenant AND v.id=h.id AND v.version=h.version WHERE h.tenant=$1`;
+      sql = `SELECT h.*,v.digest,v.source,v.observed_at,v.expires,v.erased_at FROM ct.context_heads h JOIN ct.context_versions v ON v.tenant=h.tenant AND v.id=h.id AND v.version=h.version WHERE h.tenant=$1 AND NOT(v.source ? 'e2')`;
     else if (section === 'evidence') {
       idcol = 'id';
       sql = `SELECT lpad(e.seq::text,16,'0') id,e.seq,e.kind,e.payload,e.prev_hash,e.hash FROM ct.evidence_events e WHERE e.tenant=$1`;

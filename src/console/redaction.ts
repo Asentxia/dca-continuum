@@ -1,5 +1,5 @@
 const sensitive =
-  /(?:password|credential|secret|authorization|token|cookie|private.?key|^jwt$)/i;
+  /(?:password|credential|secret|authorization|token|cookie|private.?key|^jwt$|^e2$|^receipt_?id$)/i;
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 12) return '[Depth limit]';
   if (value === null || typeof value === 'boolean' || typeof value === 'number')
