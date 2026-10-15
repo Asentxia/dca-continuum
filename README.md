@@ -21,6 +21,16 @@ Continuum is the governed operating environment for persistent autonomous intell
 
 Historical handoff/source/evidence copies are archived, not active product code. [Archive manifest and recovery](docs/audit/ARCHIVE-RECOVERY.md).
 
+## Offline integration sprint
+
+The recovered v7.1 foundation now has a local E2 governed admission implementation,
+an opt-in real NEXUS WASM profile and a narrow native AEON ranking adapter. E2 results
+remain private/quarantined/unverified; they are not automatically recallable facts.
+No live model, donor server, external-action authority or production gate is enabled.
+See [actual scope, reproducible setup, tests and limitations](docs/integrations/LOCAL-IMPLEMENTATION.md).
+Final acceptance remains subject to the owner's independent audit. Exact measured
+results belong to the source-bound evidence package, not an unqualified README badge.
+
 ## Prerequisites
 
 Linux; Node **24** for backend, separately installed Node **22** for the frontend; PostgreSQL **17** tools; Python 3, OpenSSL, Chromium and local UID/network namespace privileges. Current pins are in the lockfile. The original baseline used Node 24.14.1/22.23.3 and PostgreSQL 17.10. No live account, cloud resource or production credential is needed for PR validation.
