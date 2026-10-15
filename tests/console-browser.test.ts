@@ -459,6 +459,461 @@ test('A20 bounded grant form persists exact scope and does not assign, approve o
   const ops = (await readApi('approvals')).items;
   assert.ok(ops.every((x: any) => x.fields.grant !== grants[0].id));
 });
+test('C2 browser profile creation and rename persist without changing principal counters or configuring services', async () => {
+  const name = 'Browser Verá <literal>';
+  const description = 'Human-managed metadata only.\nNo execution requested.';
+  await go('agents');
+  await page.getByRole('button', { name: 'New VERA', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
+  await page
+    .getByRole('textbox', { name: 'Description', exact: true })
+    .fill(description);
+  await page
+    .getByRole('button', { name: 'Record VERA profile', exact: true })
+    .click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'VERA profile recorded in PAUSED mode' })
+    .waitFor();
+  const created = await readApi('agents?q=' + encodeURIComponent(name));
+  assert.equal(created.total, 1);
+  const original = created.items[0];
+  assert.equal(original.title, name);
+  assert.equal(original.status, 'Paused VERA');
+  assert.equal(original.fields.profileRevision, 1);
+  assert.equal(String(original.fields.principalEpoch), '1');
+  assert.equal(original.fields.principalGeneration, 1);
+  assert.equal(original.fields.executionMode, 'PAUSED');
+  assert.equal(original.fields.description, description);
+  assert.deepEqual(original.fields.workloadIdentities, []);
+  assert.equal(original.fields.logicalComputer, undefined);
+  assert.equal(original.fields.cognition, 'Model binding not configured');
+  await go('agents', original.id);
+  await page
+    .getByRole('button', { name: 'Edit VERA profile', exact: true })
+    .click();
+  const renamed = name + ' · renamed';
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill(renamed);
+  await page
+    .getByRole('button', { name: 'Record profile changes', exact: true })
+    .click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Profile text updated' })
+    .waitFor();
+  const changed = (
+    await readApi('agents?id=' + encodeURIComponent(original.id))
+  ).items[0];
+  assert.equal(changed.id, original.id);
+  assert.equal(changed.title, renamed);
+  assert.equal(changed.fields.profileRevision, 2);
+  for (const field of [
+    'principalEpoch',
+    'principalGeneration',
+    'profileCreatedBy',
+    'executionMode',
+    'workloadIdentities',
+    'cognition',
+  ])
+    assert.deepEqual(changed.fields[field], original.fields[field], field);
+  assert.equal(changed.fields.description, description);
+  await page.reload();
+  await page.getByRole('heading', { name: renamed, exact: true }).waitFor();
+  assert.equal(await page.locator('.inspector img').count(), 0);
+});
+test('C1 browser project creation is durable and searchable by both name and objective', async () => {
+  const name = 'Browser project Δ';
+  const objective = 'A separate searchable coordination objective';
+  const beforeWork = await readApi('work');
+  await go('projects');
+  await page.getByRole('button', { name: 'New project', exact: true }).click();
+  await page.getByLabel('Project name', { exact: true }).fill(name);
+  await page.getByLabel('Project objective', { exact: true }).fill(objective);
+  await page
+    .getByRole('button', { name: 'Submit project request', exact: true })
+    .click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Project recorded. No work' })
+    .waitFor();
+  let target = '';
+  for (const query of [name, objective]) {
+    const result = await readApi('projects?q=' + encodeURIComponent(query));
+    assert.equal(result.total, 1);
+    assert.equal(result.items[0].title, name);
+    assert.equal(result.items[0].fields.objective, objective);
+    assert.deepEqual(result.items[0].fields.tasks, []);
+    if (target) assert.equal(result.items[0].id, target);
+    target = result.items[0].id;
+  }
+  assert.equal((await readApi('work')).total, beforeWork.total);
+  await go('projects', target);
+  await page.getByRole('heading', { name, exact: true }).waitFor();
+});
+test('C1/J an unresolved project reply survives reload and resolves through an explicit GET without another POST', async () => {
+  let posts = 0,
+    lookups = 0,
+    loseLookup = true,
+    submittedKey = '';
+  await go('projects');
+  await context.route('**/api/continuum/v1/command*', async (route) => {
+    if (route.request().method() === 'POST') {
+      posts++;
+      submittedKey = route.request().postDataJSON().idempotency_key;
+      await route.fetch();
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Lost fixture acknowledgement' }),
+      });
+    } else {
+      lookups++;
+      if (loseLookup)
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Fixture lookup unavailable' }),
+        });
+      else await route.continue();
+    }
+  });
+  try {
+    await page
+      .getByRole('button', { name: 'New project', exact: true })
+      .click();
+    await page
+      .getByLabel('Project name', { exact: true })
+      .fill('Unconfirmed browser project');
+    await page
+      .getByRole('button', { name: 'Submit project request', exact: true })
+      .click();
+    await page
+      .getByText('Command outcome unconfirmed', { exact: true })
+      .waitFor();
+    const stored = await page.evaluate(() =>
+      JSON.parse(
+        sessionStorage.getItem('continuum.console.unconfirmed-command')!,
+      ),
+    );
+    assert.deepEqual(Object.keys(stored).sort(), ['identity', 'key']);
+    assert.equal(stored.key, submittedKey);
+    assert.equal(posts, 1);
+    assert.equal(lookups, 1);
+    await page
+      .getByRole('button', { name: 'Refresh authorized snapshot', exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByRole('button', { name: 'New project', exact: true })
+        .isEnabled(),
+      false,
+    );
+    await page.reload();
+    await page
+      .getByText('Command outcome unconfirmed', { exact: true })
+      .waitFor();
+    assert.equal(lookups, 1, 'reload must not automatically query or resubmit');
+    assert.equal(posts, 1);
+    assert.equal(
+      await page
+        .getByRole('button', { name: 'New project', exact: true })
+        .isEnabled(),
+      false,
+    );
+    loseLookup = false;
+    await page
+      .getByRole('button', {
+        name: 'Check stored command outcome',
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole('status')
+      .filter({ hasText: 'Stored human-command receipt found: applied' })
+      .waitFor();
+    assert.equal(posts, 1);
+    assert.equal(lookups, 2);
+    assert.equal(
+      await page.evaluate(() =>
+        sessionStorage.getItem('continuum.console.unconfirmed-command'),
+      ),
+      null,
+    );
+    const projects = await readApi(
+      'projects?q=' + encodeURIComponent('Unconfirmed browser project'),
+    );
+    assert.equal(projects.total, 1);
+  } finally {
+    await context.unroute('**/api/continuum/v1/command*');
+  }
+});
+test('C1/J server search and a real second project page can link existing UNKNOWN work without changing effect bindings', async () => {
+  const csrf = (await readApi('session')).csrf;
+  for (let index = 0; index < 64; index++) {
+    const suffix = String(index).padStart(3, '0');
+    const result = await context.request.post(
+      origin + '/api/continuum/v1/command',
+      {
+        headers: {
+          origin,
+          'content-type': 'application/json',
+          'x-ct-csrf': csrf,
+        },
+        data: {
+          schema_version: 1,
+          idempotency_key: 'browser-catalog-seed-' + suffix,
+          kind: 'create_project',
+          target: 'browser-catalog-' + suffix,
+          expected_version: 0,
+          input: {
+            name: 'Catalog project ' + suffix,
+            objective: 'Authorized catalog pagination fixture',
+          },
+        },
+      },
+    );
+    assert.equal(result.status(), 200, 'owned fixture project seed');
+    assert.equal((await result.json()).status, 'APPLIED');
+  }
+  const before = (await readApi('work?id=t-ledger-uncertain')).items[0];
+  assert.equal(before.fields.operations[0].state, 'UNKNOWN');
+  await go('work', before.id);
+  await page
+    .getByRole('button', { name: 'Link work to project', exact: true })
+    .click();
+  const form = page.getByRole('form', {
+    name: 'Link existing work to a project',
+    exact: true,
+  });
+  await form
+    .getByLabel('Search projects', { exact: true })
+    .fill('Authorized catalog pagination fixture');
+  await form
+    .getByRole('button', { name: 'Search projects', exact: true })
+    .click();
+  await form
+    .getByText(/60 project choices on this server-scoped first page/)
+    .waitFor();
+  assert.equal(
+    await form.getByRole('option', { name: /Catalog project 063/ }).count(),
+    0,
+  );
+  await form
+    .getByRole('button', { name: 'Load more project choices', exact: true })
+    .click();
+  await form
+    .getByText(/64 unique project choices loaded across 2 server-scoped pages/)
+    .waitFor();
+  await form
+    .getByRole('combobox', { name: 'Project from server results', exact: true })
+    .selectOption('browser-catalog-063');
+  await form
+    .getByRole('button', { name: 'Submit project link request', exact: true })
+    .click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Project link recorded' })
+    .waitFor();
+  const after = (await readApi('work?id=t-ledger-uncertain')).items[0];
+  assert.equal(after.fields.project, 'browser-catalog-063');
+  assert.equal(
+    after.fields.coordinationRevision,
+    before.fields.coordinationRevision + 1,
+  );
+  assert.equal(after.version, before.version);
+  assert.equal(after.status, before.status);
+  const {
+    project: beforeProject,
+    coordinationRevision: beforeRevision,
+    ...beforeFacts
+  } = before.fields;
+  const {
+    project: afterProject,
+    coordinationRevision: afterRevision,
+    ...afterFacts
+  } = after.fields;
+  assert.deepEqual(afterFacts, beforeFacts);
+  assert.equal(after.fields.operations[0].state, 'UNKNOWN');
+});
+test('J local appearance preserves the open profile draft and commands while forms reflow and pass automated axe checks', async () => {
+  await go('agents');
+  await page.getByRole('button', { name: 'New VERA', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Name', exact: true })
+    .fill('Unsaved appearance draft');
+  const commandsBefore = requests.filter(
+    (request) =>
+      request.method === 'POST' && request.path === '/api/continuum/v1/command',
+  ).length;
+  const findings: Record<string, unknown> = {};
+  for (const appearance of ['light', 'dark', 'system']) {
+    await page
+      .getByLabel('Appearance', { exact: true })
+      .selectOption(appearance);
+    assert.equal(
+      await page.locator('.console').getAttribute('data-appearance'),
+      appearance,
+    );
+    assert.equal(
+      await page
+        .getByRole('textbox', { name: 'Name', exact: true })
+        .inputValue(),
+      'Unsaved appearance draft',
+    );
+    assert.equal(
+      await page
+        .getByRole('button', { name: 'Record VERA profile', exact: true })
+        .isEnabled(),
+      true,
+    );
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert.ok(
+        (await page.evaluate(() => document.documentElement.scrollWidth)) <=
+          width + 1,
+        appearance + ' form overflows ' + width,
+      );
+    }
+    const axe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    findings[appearance] = {
+      violations: axe.violations,
+      passes: axe.passes.map((pass) => pass.id),
+    };
+    assert.equal(axe.violations.length, 0, appearance + ' profile form axe');
+    if (appearance !== 'system')
+      await page.screenshot({
+        path: dir + '/PROFILE-FORM-' + appearance.toUpperCase() + '.png',
+        fullPage: true,
+      });
+  }
+  await fs.writeFile(
+    dir + '/AXE-PROFILE-THEMES.json',
+    JSON.stringify(findings, null, 2),
+  );
+  assert.equal(
+    requests.filter(
+      (request) =>
+        request.method === 'POST' &&
+        request.path === '/api/continuum/v1/command',
+    ).length,
+    commandsBefore,
+  );
+  await page.getByRole('textbox', { name: 'Name', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page
+      .getByRole('textbox', { name: 'Description', exact: true })
+      .evaluate((node) => node === document.activeElement),
+    true,
+  );
+});
+test('J read-only Work map uses the authorized filtered page, preserves UNKNOWN and supports keyboard/theme/reflow navigation', async () => {
+  const wire = (await readApi('work?id=t-ledger-uncertain')).items[0];
+  const operation = wire.fields.operations[0];
+  assert.equal(operation.state, 'UNKNOWN');
+  const commandsBefore = requests.filter(
+    (request) =>
+      request.method === 'POST' && request.path === '/api/continuum/v1/command',
+  ).length;
+  await go('work');
+  await page
+    .getByLabel('Search authorized Work', { exact: true })
+    .fill(wire.id);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.get('q') === wire.id);
+  await page.getByRole('button', { name: 'All work', exact: true }).click();
+  const mapButton = page.getByRole('button', { name: 'Map', exact: true });
+  await mapButton.focus();
+  await page.keyboard.press('Enter');
+  const map = page.getByRole('region', {
+    name: 'Work relationships',
+    exact: true,
+  });
+  const task = map.getByRole('article', {
+    name: 'Task ' + wire.id,
+    exact: true,
+  });
+  await task.waitFor({ state: 'visible' });
+  assert.equal(await mapButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await map.getByRole('article').count(), 1);
+  assert.ok((await task.innerText()).includes('Wire state: UNKNOWN'));
+  assert.equal(
+    await task.getByText('Verified fixture result', { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await task
+      .getByRole('link', {
+        name: 'Inspect operation ' + operation.id,
+        exact: true,
+      })
+      .getAttribute('href'),
+    '/console/evidence?selected=' +
+      encodeURIComponent('operation:' + operation.id),
+  );
+  const findings: Record<string, unknown> = {};
+  for (const appearance of ['light', 'dark', 'system']) {
+    await page
+      .getByLabel('Appearance', { exact: true })
+      .selectOption(appearance);
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert.ok(
+        (await page.evaluate(() => document.documentElement.scrollWidth)) <=
+          width + 1,
+        appearance + ' Work map overflows ' + width,
+      );
+    }
+    const axe = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    findings[appearance] = {
+      violations: axe.violations,
+      passes: axe.passes.map((pass) => pass.id),
+    };
+    assert.equal(axe.violations.length, 0, appearance + ' Work map axe');
+  }
+  await fs.writeFile(
+    dir + '/AXE-WORK-MAP-THEMES.json',
+    JSON.stringify(findings, null, 2),
+  );
+  await page.screenshot({ path: dir + '/WORK-MAP-MOBILE.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole('heading', { name: 'Work relationships', exact: true })
+      .count(),
+    0,
+  );
+  await mapButton.click();
+  const inspectTask = task.getByRole('button', {
+    name: wire.title + ' · Inspect task ' + wire.id,
+    exact: true,
+  });
+  await inspectTask.focus();
+  await page.keyboard.press('Enter');
+  await page.waitForURL(
+    (url) =>
+      url.searchParams.get('selected') === 'task:' + wire.id &&
+      url.searchParams.get('q') === wire.id,
+  );
+  await page.locator('.inspector-heading h2').waitFor({ state: 'visible' });
+  assert.equal(
+    requests.filter(
+      (request) =>
+        request.method === 'POST' &&
+        request.path === '/api/continuum/v1/command',
+    ).length,
+    commandsBefore,
+  );
+  assert.deepEqual(
+    (await readApi('work?id=' + wire.id)).items[0].fields,
+    wire.fields,
+  );
+});
 test('A07/A08/A10/A14/A15/A19/A26/A33/A35/A37 every major read surface uses authenticated backend facts', async () => {
   for (const section of [
     'projects',

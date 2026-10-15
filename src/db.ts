@@ -385,7 +385,8 @@ export function manifestAdmission(
       return 'MANIFEST_UNAVAILABLE';
     if (Number(head.version) !== Number(manifest.contextVersion))
       return 'MANIFEST_STALE';
-    if (+new Date(boundVersion.expires as string) <= now)
+    const expires = +new Date(boundVersion.expires as string);
+    if (!Number.isFinite(expires) || !Number.isFinite(now) || expires <= now)
       return 'MANIFEST_UNAVAILABLE';
     const allowed =
       head.visibility === 'TENANT' ||

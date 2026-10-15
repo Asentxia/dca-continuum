@@ -34,14 +34,24 @@ run BASELINE-IDENTITY dist/tests/production-identity.test.js
 run BASELINE-LEGACY dist/tests/legacy-hotfix.test.js
 python3 tests/legacy-hotfix-probe.py > .artifacts/implementation/final/LEGACY-PYTHON.json
 run BASELINE-RELEASE-LOCAL dist/tests/release-local.test.js
+# D1 requires clean canonical context heads; run before the first context writer.
+run CONTEXT-ADMISSION dist/tests/context-admission.test.js
 run PRODUCT-BACKEND dist/tests/product-backend.test.js
 run AUDIT-REGRESSIONS dist/tests/audit-regressions.test.js
 run CONTINUITY dist/tests/continuity.test.js
 run PLACEMENT-BINDING dist/tests/placement-binding.test.js
 run MANIFEST-BINDING dist/tests/manifest-binding.test.js
+run BOUNDED-COMPUTATION dist/tests/bounded-computation-contract.test.js
+run MODEL-PROTOCOL dist/tests/model-protocol.test.js
+run RESTRICTED-MEMORY-PROTOCOL dist/tests/restricted-memory-protocol.test.js
+run RECALL-SERVICE dist/tests/recall-service.test.js
 run TOOL-MANIFEST dist/tests/tool-manifest.test.js
 run EVENT-ENVELOPE dist/tests/event-envelope.test.js
 run TASK-ADMISSION dist/tests/task-admission.test.js
+run PROJECT-COMMANDS dist/tests/project-commands.test.js
+run VERA-PROFILE dist/tests/vera-profile.test.js
+run VERA-CONSOLE-COMMANDS dist/tests/vera-console-commands.test.js
+run VERA-PROFILE-BACKUP dist/tests/vera-profile-backup.test.js
 run FONT-NOTICES dist/tests/font-notices.test.js
 run REVIEW-REMEDIATION dist/tests/review-remediation.test.js
 run DEPENDENCY-OVERRIDES dist/tests/dependency-overrides.test.js

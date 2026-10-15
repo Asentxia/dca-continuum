@@ -18,7 +18,11 @@ import {
   groupFocus,
 } from './semantics.js';
 import { CursorCodec } from './pagination.js';
-import { featureCatalogue, type ConsoleMode } from './features.js';
+import {
+  featureCatalogue,
+  freshHumanMfa,
+  type ConsoleMode,
+} from './features.js';
 import { redact, requiresRedaction } from './redaction.js';
 export class ConsoleReads {
   constructor(
@@ -58,6 +62,7 @@ export class ConsoleReads {
           this.mode,
           actor,
           !ctrl || ctrl.blocked || ctrl.fence !== this.fence,
+          now,
         ),
         fresh = features.commands.state === 'available';
       const q = options.q ?? '';
@@ -89,7 +94,7 @@ export class ConsoleReads {
               issuer: i.issuer,
               audience: i.audience,
               tokenExpires: new Date(actor.expires).toISOString(),
-              freshMfa: fresh,
+              freshMfa: freshHumanMfa(actor, now),
               identitySource:
                 this.mode === 'LOCAL_FIXTURE'
                   ? 'LOCAL TEST ISSUER — not production sign-in'
@@ -420,11 +425,7 @@ export class ConsoleReads {
           tenant: i.tenant,
           principal: i.principal ?? null,
           expires: actor.expires,
-          fresh_mfa:
-            actor.methods.includes('mfa') &&
-            actor.authTime !== undefined &&
-            now - actor.authTime <= 300000 &&
-            actor.authTime <= now + 5000,
+          fresh_mfa: freshHumanMfa(actor, now),
         },
       });
     });
@@ -449,7 +450,7 @@ export class ConsoleReads {
     else if (section === 'governance')
       sql = `SELECT o.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',r.id,'name',r.name,'revision',r.revision) ORDER BY r.id) FROM ct.role_definitions r WHERE r.tenant=o.tenant AND r.organization=o.id),'[]') roles,COALESCE((SELECT jsonb_agg(jsonb_build_object('subjectKind',m.subject_kind,'subjectId',m.subject_id,'roleId',m.role_id,'ownerSeat',m.owner_seat,'revision',m.revision) ORDER BY m.subject_kind,m.subject_id) FROM ct.memberships m WHERE m.tenant=o.tenant AND m.organization=o.id),'[]') memberships,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',d.id,'revision',d.revision,'version',d.current_version,'title',v.title,'body',v.body) ORDER BY d.id) FROM ct.mandates d JOIN ct.mandate_versions v ON v.tenant=d.tenant AND v.organization=d.organization AND v.mandate=d.id AND v.version=d.current_version WHERE d.tenant=o.tenant AND d.organization=o.id),'[]') mandates FROM ct.organizations o WHERE o.tenant=$1`;
     else if (section === 'agents')
-      sql = `SELECT p.*,c.id AS computer_id,c.generation AS computer_generation,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'kind',i.kind,'active',i.active,'version',i.version)) FROM ct.identities i WHERE i.tenant=p.tenant AND i.principal=p.id),'[]') workload_identities,(SELECT to_jsonb(b) FROM ct.cognition_bindings b WHERE b.tenant=p.tenant AND b.principal=p.id ORDER BY b.revision DESC LIMIT 1) cognition FROM ct.principals p LEFT JOIN ct.computers c ON c.tenant=p.tenant AND c.principal=p.id WHERE p.tenant=$1`;
+      sql = `SELECT p.*,v.name AS profile_name,v.description AS profile_description,v.revision AS profile_revision,v.created_by AS profile_created_by,c.id AS computer_id,c.generation AS computer_generation,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'kind',i.kind,'active',i.active,'version',i.version)) FROM ct.identities i WHERE i.tenant=p.tenant AND i.principal=p.id),'[]') workload_identities,(SELECT to_jsonb(b) FROM ct.cognition_bindings b WHERE b.tenant=p.tenant AND b.principal=p.id ORDER BY b.revision DESC LIMIT 1) cognition FROM ct.principals p LEFT JOIN ct.vera_profiles v ON v.tenant=p.tenant AND v.id=p.id LEFT JOIN ct.computers c ON c.tenant=p.tenant AND c.principal=p.id WHERE p.tenant=$1`;
     else if (section === 'computers')
       sql = `SELECT x.*,v.raw_state,v.provider_class,v.health,v.qualification_scope,v.observed_at,v.fresh_until,v.checkpoint_status,p.execution_mode FROM ct.computers x JOIN ct.principals p ON p.tenant=x.tenant AND p.id=x.principal LEFT JOIN ct.computer_observations v ON v.tenant=x.tenant AND v.computer=x.id AND v.generation=x.generation WHERE x.tenant=$1`;
     else if (['approvals', 'recovery', 'operation'].includes(section))
@@ -468,7 +469,7 @@ export class ConsoleReads {
     else if (section === 'security')
       sql = `SELECT id,kind,tenant,principal,domain_role,active,version,issuer,audience FROM ct.identities WHERE tenant=$1`;
     if (!sql) throw Error('unknown source');
-    const base = `SELECT * FROM (${sql}) allowed WHERE ($2::text IS NULL OR ${idcol}=$2) AND ($3::text='%%' OR (id::text||' '||COALESCE(to_jsonb(allowed)->>'objective',to_jsonb(allowed)->>'name',to_jsonb(allowed)->>'title',to_jsonb(allowed)->>'kind',to_jsonb(allowed)->>'action','')) ILIKE $3)`;
+    const base = `SELECT * FROM (${sql}) allowed WHERE ($2::text IS NULL OR ${idcol}=$2) AND ($3::text='%%' OR concat_ws(' ',id::text,to_jsonb(allowed)->>'profile_name',to_jsonb(allowed)->>'objective',to_jsonb(allowed)->>'name',to_jsonb(allowed)->>'title',to_jsonb(allowed)->>'kind',to_jsonb(allowed)->>'action') ILIKE $3)`;
     const total = Number(
       (
         await c.query(`SELECT count(*) n FROM (${base}) bounded`, [
@@ -560,7 +561,7 @@ export class ConsoleReads {
         'project',
         x.name,
         Number(x.revision),
-        'Read-only project registry',
+        'Project registry · organizing work does not authorize effects',
         {
           objective: x.objective,
           tasks: x.tasks,
@@ -572,13 +573,26 @@ export class ConsoleReads {
       return item(
         x.id,
         'vera',
-        x.id,
+        x.profile_name ?? x.id,
         Number(x.epoch),
-        x.active ? 'Active VERA' : 'Inactive VERA',
+        !x.active
+          ? 'Inactive VERA'
+          : x.execution_mode === 'PAUSED'
+            ? 'Paused VERA'
+            : x.execution_mode === 'HUMAN'
+              ? 'Human control'
+              : 'Agent mode — execution is not verified here',
         {
           VERA: x.id,
           principalEpoch: x.epoch,
           principalGeneration: Number(x.generation),
+          profileRevision:
+            x.profile_revision == null ? null : Number(x.profile_revision),
+          profileName: x.profile_name ?? null,
+          description: x.profile_description ?? null,
+          profileCreatedBy: x.profile_created_by ?? null,
+          profileAuthority:
+            'Profile text is not a grant, approval, workflow admission or execution result',
           ...(x.computer_id
             ? {
                 logicalComputer: x.computer_id,

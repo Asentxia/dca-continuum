@@ -31,6 +31,7 @@ import { OrganizationService } from '../src/regency/organization-service.js';
 import { fixture } from './implementation-helpers.js';
 import { admin, bootstrap, fence, gov } from './helpers.js';
 import { randomBytes } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 
 const v1Canonical =
   '{"action":"write","contractVersion":1,"cost":1,"deadline":"2026-01-01T00:00:00.000Z","epoch":1,"fence":"fixture-fence-v1","generation":1,"grantId":"grant","grantVersion":1,"id":"op-vector","idempotencyKey":"op-vector","params":{"value":"vector"},"planVersion":1,"principal":"vera","provider":"fixture","resource":"fixture-object","taskId":"task","tenant":"a"}';
@@ -75,12 +76,14 @@ function psql(database: string, args: string[]) {
   return result.stdout;
 }
 
-async function waitFor(like: string) {
+async function waitFor(like: string, blockingPid?: number) {
+  if (blockingPid !== undefined)
+    assert.ok(Number.isInteger(blockingPid) && blockingPid > 0);
   for (let n = 0; n < 80; n++) {
     const found = (
       await admin.query(
-        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='transactionid' AND state='active' AND query LIKE $1",
-        [like],
+        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND wait_event='transactionid' AND state='active' AND query LIKE $1 AND ($2::integer IS NULL OR $2=ANY(pg_blocking_pids(pid)))",
+        [like, blockingPid ?? null],
       )
     ).rows[0].n;
     if (found > 0) return;
@@ -97,6 +100,69 @@ async function denial(id: string) {
     )
   ).rows[0];
   return JSON.parse(row.payload).detail.reason as string;
+}
+
+async function waitForContextExpiry(id: string, version: number) {
+  const until = performance.now() + 20000;
+  for (;;) {
+    const witness = (
+      await admin.query(
+        `WITH t AS MATERIALIZED (SELECT clock_timestamp() AS wall)
+         SELECT current_database() AS database, v.expires, t.wall,
+                v.expires <= t.wall AS expired
+         FROM ct.context_versions v CROSS JOIN t
+         WHERE v.tenant=$1 AND v.id=$2 AND v.version=$3`,
+        ['a', id, version],
+      )
+    ).rows[0];
+    assert.ok(witness, 'bound context version must exist');
+    assert.ok(Number.isFinite(+new Date(witness.expires)));
+    assert.ok(Number.isFinite(+new Date(witness.wall)));
+    if (witness.expired === true) return witness;
+    if (performance.now() >= until)
+      assert.fail(
+        'database did not confirm context expiry: ' + JSON.stringify(witness),
+      );
+    await delay(25);
+  }
+}
+
+async function closeExpiryFixture(
+  f: Awaited<ReturnType<typeof fixture>>,
+  ids: readonly string[],
+  primaryFailed: boolean,
+) {
+  let cleanupError: unknown;
+  for (const id of ids) {
+    try {
+      const head = (
+        await admin.query(
+          "SELECT principal,deleted FROM ct.context_heads WHERE tenant='a' AND id=$1",
+          [id],
+        )
+      ).rows[0];
+      if (!head) continue;
+      assert.equal(
+        head.principal,
+        f.principal,
+        'cleanup must own this exact context',
+      );
+      if (!head.deleted) await contexts.erase(await f.actor('user'), id);
+    } catch (error) {
+      cleanupError ??= error;
+    }
+  }
+  try {
+    await f.close();
+  } catch (error) {
+    cleanupError ??= error;
+  }
+  if (cleanupError) {
+    if (!primaryFailed) throw cleanupError;
+    console.error(
+      'Exact-owned context cleanup failed; original test failure retained.',
+    );
+  }
 }
 
 async function publish(
@@ -324,6 +390,90 @@ test('version 1 and 2 bytes stay unchanged when version 3 is added', () => {
     ),
     null,
   );
+});
+
+test('bound context expiry rejects invalid timestamps and non-finite database time', () => {
+  const head = {
+    version: 1,
+    deleted: false,
+    visibility: 'PRIVATE',
+    principal: 'vera',
+  };
+  const now = Date.parse('2026-01-01T00:00:00.000Z');
+  const future = new Date(now + 60000);
+  for (const version of [3, 4]) {
+    const operation = {
+      ...vectorRow,
+      contract_version: version,
+      context_id: 'clock-vector',
+      context_version: 1,
+      ...(version === 4 ? { tool_id: 'clock-tool', tool_revision: 1 } : {}),
+    };
+    const tool =
+      version === 4
+        ? {
+            boundRevision: 1,
+            maximum: 1,
+            maximumDigest: 'a'.repeat(64),
+            indexRevision: 1,
+            indexDigest: 'a'.repeat(64),
+          }
+        : null;
+    for (const expires of [
+      'invalid',
+      undefined,
+      Infinity,
+      -Infinity,
+      new Date(NaN),
+    ]) {
+      assert.equal(
+        manifestAdmission(
+          operation,
+          head,
+          { erased_at: null, expires },
+          null,
+          now,
+          tool,
+        ),
+        'MANIFEST_UNAVAILABLE',
+      );
+    }
+    for (const clock of [NaN, Infinity, -Infinity]) {
+      assert.equal(
+        manifestAdmission(
+          operation,
+          head,
+          { erased_at: null, expires: future },
+          null,
+          clock,
+          tool,
+        ),
+        'MANIFEST_UNAVAILABLE',
+      );
+    }
+    assert.equal(
+      manifestAdmission(
+        operation,
+        head,
+        { erased_at: null, expires: future },
+        null,
+        now,
+        tool,
+      ),
+      null,
+    );
+    assert.equal(
+      manifestAdmission(
+        operation,
+        head,
+        { erased_at: null, expires: new Date(now) },
+        null,
+        now,
+        tool,
+      ),
+      'MANIFEST_UNAVAILABLE',
+    );
+  }
 });
 
 test('upgrade preserves historical rows and the database rejects a partial manifest', async () => {
@@ -769,6 +919,7 @@ test('admission denies a changed manifest and still allows quarantine and wider 
   const f = await fixture('manifest-life');
   const machine = await f.actor('machine');
   const owner = await f.actor('user');
+  let primaryFailed = false;
   try {
     await contexts.ingest(machine, {
       id: 'life-quarantine',
@@ -832,13 +983,6 @@ test('admission denies a changed manifest and still allows quarantine and wider 
       source: { kind: 'document', reference: 'doc:life-expired' },
       ttlSeconds: 15,
     });
-    const expiry = new Date(
-      (
-        await admin.query(
-          "SELECT expires FROM ct.context_versions WHERE tenant='a' AND id='life-expired' AND version=1",
-        )
-      ).rows[0].expires,
-    );
     const expired = await publish(
       f,
       'life-expired-op',
@@ -847,13 +991,25 @@ test('admission denies a changed manifest and still allows quarantine and wider 
       f.prefix + '-worker-a',
       'life-expired',
     );
-    const remaining = +expiry - Date.now() + 300;
-    if (remaining > 0) await delay(remaining);
+    const initial = (
+      await admin.query(
+        "SELECT state,contract_version,context_id,context_version FROM ct.operations WHERE tenant='a' AND id=$1",
+        [expired.x.id],
+      )
+    ).rows[0];
+    assert.equal(initial.state, 'REQUESTED');
+    assert.equal(Number(initial.contract_version), 3);
+    assert.equal(initial.context_id, 'life-expired');
+    assert.equal(Number(initial.context_version), 1);
+    const sendsBeforeExpiry = f.provider.sends;
+    // Ingestion and admission use database time; a Node-only sleep is not proof.
+    await waitForContextExpiry('life-expired', 1);
     assert.equal(
       (await f.controller.dispatch(expired.cap, expired.x.id)).state,
       'DENIED',
     );
     assert.equal(await denial(expired.x.id), 'MANIFEST_UNAVAILABLE');
+    assert.equal(f.provider.sends, sendsBeforeExpiry);
     await contexts.erase(owner, 'life-expired');
     await cognition.record(owner, {
       principal: f.principal,
@@ -931,8 +1087,133 @@ test('admission denies a changed manifest and still allows quarantine and wider 
       'COMMITTED',
     );
     assert.equal(f.provider.sends, 2);
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
   } finally {
-    await f.close();
+    await closeExpiryFixture(f, ['life-expired'], primaryFailed);
+  }
+});
+
+test('database expiry-witness is independent of the application wall clock', async () => {
+  const f = await fixture('manifest-clock');
+  const machine = await f.actor('machine');
+  const realNow = Date.now;
+  let primaryFailed = false;
+  try {
+    for (const skew of [60000, -60000]) {
+      const context = skew > 0 ? 'clock-ahead' : 'clock-behind';
+      await note(f, context, false, 5);
+      const bound = await publish(
+        f,
+        context + '-op',
+        machine,
+        f.principal,
+        f.prefix + '-worker-a',
+        context,
+      );
+      const before = (
+        await admin.query(
+          "SELECT expires > clock_timestamp() AS fresh FROM ct.context_versions WHERE tenant='a' AND id=$1 AND version=1",
+          [context],
+        )
+      ).rows[0];
+      assert.equal(before.fresh, true, 'context must be fresh before the wait');
+      // Skew only the test's waiting phase, never token creation or dispatch.
+      // A forward Node clock would make the old sleep-only oracle finish early.
+      Date.now = () => realNow() + skew;
+      try {
+        const witness = await waitForContextExpiry(context, 1);
+        assert.equal(witness.expired, true);
+      } finally {
+        Date.now = realNow;
+      }
+      assert.equal(
+        (await f.controller.dispatch(bound.cap, bound.x.id)).state,
+        'DENIED',
+      );
+      assert.equal(await denial(bound.x.id), 'MANIFEST_UNAVAILABLE');
+      assert.equal(f.provider.sends, 0);
+    }
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
+  } finally {
+    Date.now = realNow;
+    await closeExpiryFixture(f, ['clock-ahead', 'clock-behind'], primaryFailed);
+  }
+});
+
+test('context expiry during a final-send context lock wait denies without sending', async () => {
+  const f = await fixture('manifest-expiry-lock');
+  const machine = await f.actor('machine');
+  const hold = await contextDb.connect();
+  let pending: Promise<Record<string, any>> | undefined;
+  let primaryFailed = false;
+  try {
+    const holdingPid = Number(
+      (await hold.query('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+    );
+    assert.ok(Number.isInteger(holdingPid) && holdingPid > 0);
+    await note(f, 'final-expiry-context', false, 15);
+    const bound = await publish(
+      f,
+      'final-expiry-op',
+      machine,
+      f.principal,
+      f.prefix + '-worker-a',
+      'final-expiry-context',
+    );
+    const controller = new EffectController(
+      f.controllerDb,
+      f.provider,
+      fence,
+      30000,
+      {
+        afterReservation: async () => {
+          await hold.query('BEGIN');
+          await hold.query(
+            'SELECT * FROM ct.context_heads WHERE tenant=$1 AND id=$2 FOR UPDATE',
+            ['a', 'final-expiry-context'],
+          );
+        },
+      },
+    );
+    pending = controller.dispatch(bound.cap, bound.x.id);
+    // Retain cleanup ownership if a preceding witness/assertion fails.
+    void pending.catch(() => undefined);
+    await waitFor(
+      '%SELECT * FROM ct.context_heads WHERE tenant=$1 AND id=$2 FOR UPDATE%',
+      holdingPid,
+    );
+    const reserved = (
+      await admin.query(
+        "SELECT state FROM ct.operations WHERE tenant='a' AND id=$1",
+        [bound.x.id],
+      )
+    ).rows[0];
+    assert.equal(reserved.state, 'RESERVED');
+    assert.equal(f.provider.sends, 0);
+    await waitForContextExpiry('final-expiry-context', 1);
+    await hold.query('COMMIT');
+    assert.equal((await pending).state, 'DENIED');
+    assert.equal(await denial(bound.x.id), 'MANIFEST_UNAVAILABLE');
+    assert.equal(f.provider.sends, 0);
+    const grant = (
+      await admin.query(
+        "SELECT reserved FROM ct.grants WHERE tenant='a' AND id=$1",
+        [bound.x.grant],
+      )
+    ).rows[0];
+    assert.equal(Number(grant.reserved), 0);
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
+  } finally {
+    await hold.query('ROLLBACK').catch(() => undefined);
+    hold.release();
+    await pending?.catch(() => undefined);
+    await closeExpiryFixture(f, ['final-expiry-context'], primaryFailed);
   }
 });
 

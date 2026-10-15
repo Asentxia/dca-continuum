@@ -114,6 +114,10 @@ export const CommandSchema = z
     schema_version: z.literal(1),
     idempotency_key: Identifier,
     kind: z.enum([
+      'create_vera',
+      'update_vera_profile',
+      'create_project',
+      'link_task_project',
       'create_task',
       'approve',
       'create_grant',
@@ -135,7 +139,24 @@ export const CommandSchema = z
   })
   .strict();
 export type HumanCommand = z.infer<typeof CommandSchema>;
+const VeraProfileFields = {
+  name: z
+    .string()
+    .min(1)
+    .max(200)
+    .refine((value) => value.trim().length > 0, 'nonblank VERA name required'),
+  description: z.string().max(8000),
+};
 export const CommandInputs = {
+  create_vera: z.object(VeraProfileFields).strict(),
+  update_vera_profile: z.object(VeraProfileFields).strict(),
+  create_project: z
+    .object({
+      name: z.string().min(1).max(200),
+      objective: z.string().max(8000),
+    })
+    .strict(),
+  link_task_project: z.object({ project: Identifier }).strict(),
   create_task: z
     .object({
       principal: Identifier,

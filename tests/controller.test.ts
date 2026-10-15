@@ -18,7 +18,7 @@ import { FixtureAdapter } from '../internal/fixtures/provider-adapter.js';
 import { unshareIsolated } from '../internal/fixtures/fixture-priv.js';
 import { callController } from '../src/controller-client.js';
 import { verifyCapability } from '../src/capability.js';
-import { readContext } from '../src/memory.js';
+import { readLegacyM3Context as readContext } from '../internal/fixtures/legacy-memory-probe.js';
 import { secrets, capability, config, start, stop } from './process-helpers.js';
 const socket = process.cwd() + '/.local/controller.sock';
 const ctlDb = pool('ct_controller');

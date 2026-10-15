@@ -1,17 +1,27 @@
 import type { VerifiedIdentity } from '../identity-provider.js';
 import type { ReadEnvelope } from './contracts.js';
 export type ConsoleMode = 'LOCAL_FIXTURE' | 'STAGING';
+export function freshHumanMfa(actor: VerifiedIdentity, now: number) {
+  return (
+    Number.isFinite(now) &&
+    actor.kind === 'user' &&
+    actor.expires > now &&
+    actor.methods.includes('mfa') &&
+    actor.authTime !== undefined &&
+    Number.isFinite(actor.authTime) &&
+    actor.authTime <= now + 5000 &&
+    now - actor.authTime <= 300000
+  );
+}
 export function featureCatalogue(
   mode: ConsoleMode,
   actor: VerifiedIdentity,
   blocked: boolean,
+  now: number,
 ): ReadEnvelope['features'] {
-  const fresh =
-    actor.kind === 'user' &&
-    actor.methods.includes('mfa') &&
-    actor.authTime !== undefined &&
-    actor.authTime <= Date.now() + 5000 &&
-    Date.now() - actor.authTime <= 300000;
+  const fresh = freshHumanMfa(actor, now);
+  // The caller has already enrolled the human. The database's identity
+  // constraint permits human/owner and machine/worker, not a self-granted role.
   const enabled = mode === 'LOCAL_FIXTURE' && fresh && !blocked;
   const f = (state: any, reason: string, scope: any = 'NONE') => ({
     state,

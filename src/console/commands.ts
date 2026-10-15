@@ -15,6 +15,8 @@ import {
 import { redact, requiresRedaction } from './redaction.js';
 import { OrganizationService } from '../regency/organization-service.js';
 import { MandateService } from '../regency/mandate-service.js';
+import { WorkCoordination } from './coordination.js';
+import { VeraService } from '../regency/vera-service.js';
 export class ConsoleCommands {
   constructor(
     private db: pg.Pool,
@@ -24,6 +26,8 @@ export class ConsoleCommands {
     private mode: 'LOCAL_FIXTURE' | 'STAGING',
     private organizations = new OrganizationService(),
     private mandates = new MandateService(),
+    private coordination = new WorkCoordination(db, fence),
+    private veras = new VeraService(db, fence),
   ) {
     if (this.mode === 'LOCAL_FIXTURE')
       assertLocalFixtures('local console commands profile');
@@ -49,6 +53,7 @@ export class ConsoleCommands {
       if (previous) {
         if (previous.body_digest !== digest)
           throw Error('command binding conflict');
+        await enrolled(c, actor, true);
         return receipt(previous, true);
       }
       const id = randomUUID();
@@ -146,6 +151,70 @@ export class ConsoleCommands {
     b: any,
   ): Promise<unknown> {
     switch (cmd.kind) {
+      case 'create_vera': {
+        if (cmd.expected_version !== 0) throw Error('new VERA profile version');
+        const result = await this.veras.create(a, { id: cmd.target, ...b }, c);
+        return {
+          ...result,
+          profileRevision: result.creation.profileRevision,
+          version: result.creation.profileRevision,
+        };
+      }
+      case 'update_vera_profile': {
+        const result = await this.veras.updateProfile(
+          a,
+          {
+            id: cmd.target,
+            ...b,
+            expectedRevision: cmd.expected_version,
+          },
+          c,
+        );
+        return {
+          ...result,
+          profileRevision: result.revision,
+          version: result.revision,
+        };
+      }
+      case 'create_project': {
+        if (cmd.expected_version !== 0) throw Error('new project version');
+        const result = await this.coordination.project(
+          a,
+          cmd.target,
+          b.name,
+          b.objective,
+          c,
+        );
+        return {
+          ...result,
+          version: result.revision,
+          workflowAdmitted: false,
+          effectAuthority: false,
+          externalEffect: false,
+        };
+      }
+      case 'link_task_project': {
+        if (
+          !Number.isSafeInteger(cmd.expected_version) ||
+          cmd.expected_version > Number.MAX_SAFE_INTEGER - 1
+        )
+          throw Error('coordination version');
+        const result = await this.coordination.link(
+          a,
+          cmd.target,
+          b.project,
+          cmd.expected_version,
+          c,
+        );
+        return {
+          ...result,
+          project: b.project,
+          version: result.revision,
+          workflowAdmitted: false,
+          effectAuthority: false,
+          externalEffect: false,
+        };
+      }
       case 'create_task': {
         if (cmd.expected_version !== 0) throw Error('new task version');
         const result = await this.product.createTask(

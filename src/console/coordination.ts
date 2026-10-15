@@ -22,27 +22,38 @@ export class WorkCoordination {
     id: string,
     name: string,
     objective: string,
+    client?: pg.PoolClient,
   ) {
-    return tx(this.db, async (c) => {
+    const run = async (c: pg.PoolClient) => {
       const i = await this.start(c, a);
       identifier(id);
       if (!name.trim() || name.length > 200 || objective.length > 8000)
         throw Error('project bounds');
-      await c.query(
-        'INSERT INTO ct.projects(tenant,id,name,objective) VALUES($1,$2,$3,$4)',
-        [i.tenant, id, name, objective],
-      );
+      const row = (
+        await c.query(
+          'INSERT INTO ct.projects(tenant,id,name,objective) VALUES($1,$2,$3,$4) RETURNING revision',
+          [i.tenant, id, name, objective],
+        )
+      ).rows[0];
       await append(c, i.tenant, 'PROJECT_REGISTERED', { id, actor: i.id });
-      return { id };
-    });
+      return { id, revision: Number(row.revision) };
+    };
+    return client ? run(client) : tx(this.db, run);
   }
   async link(
     a: VerifiedIdentity,
     task: string,
     project: string,
     expected: number,
+    client?: pg.PoolClient,
   ) {
-    return tx(this.db, async (c) => {
+    if (
+      !Number.isSafeInteger(expected) ||
+      expected < 0 ||
+      expected > Number.MAX_SAFE_INTEGER - 1
+    )
+      throw Error('coordination version');
+    const run = async (c: pg.PoolClient) => {
       const i = await this.start(c, a);
       const t = (
         await c.query('SELECT * FROM ct.tasks WHERE tenant=$1 AND id=$2', [
@@ -71,7 +82,8 @@ export class WorkCoordination {
         );
       await append(c, i.tenant, 'TASK_PROJECT_LINKED', { task, project });
       return { task, revision: expected + 1 };
-    });
+    };
+    return client ? run(client) : tx(this.db, run);
   }
   async dependency(
     a: VerifiedIdentity,

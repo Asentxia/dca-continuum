@@ -44,3 +44,6 @@ if [ "$(psql -d ct_test -Atc "SELECT 1 FROM information_schema.columns WHERE tab
  psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/019-task-mandate-admission.sql > .artifacts/implementation/MIGRATION-019-task-mandate-admission.log 2>&1
 fi
 psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/020-tool-manifest.sql > .artifacts/implementation/MIGRATION-020-tool-manifest.log 2>&1
+if [ "$(psql -d ct_test -Atc "SELECT to_regclass('ct.vera_profiles') IS NOT NULL")" != t ]; then
+ psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/021-vera-profiles.sql > .artifacts/implementation/MIGRATION-021-vera-profiles.log 2>&1
+fi
