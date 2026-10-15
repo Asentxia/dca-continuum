@@ -20,6 +20,23 @@ partial is not complete merely because its first implementation PR merged.
 
 No ENG requirement is dropped. NEXUS, AEON-IQ, VERA, and Regency remain. Donor test runs do not close Continuum acceptance tests.
 
+## Active local implementation sprint — 2026-10-15
+
+D13 in OWNER-DECISIONS.md authorizes actual isolated offline implementation and testing.
+The local baseline is the recovered v7.1 tree
+`dc25bacb7625a4c889eadb36cbdb8e47ea33c3c6`, not the older published main.
+Original commit label d75928ca9a95cdddbbca9ee1a265c7f28395ce86 is recorded, but its
+original commit object/parentage is not reconstructed or fabricated. The local import
+preserves fetched public history and explicitly records snapshot/mode recovery commits.
+
+Current work: E2 governed admission/withdrawal/recovery denial; narrow real NEXUS
+bounded execution; AEON request-local memory selection behind ContextService/R1;
+owned-fixture regression/native integration and final independent-audit Git handoff.
+Implementation/test maturity must be reported from actual source/evidence; no status
+is promoted merely by this authorization. The earlier main/status sections below
+remain historical context, not current source identity. No ENG acceptance is dropped.
+Real-model autonomy, full product completion and production remain separate gates.
+
 ## What the finished product must deliver
 
 Asentxia is the institution. Continuum is the governed persistent environment. VERA is the durable accountable principal. A VERA is not a model, session, process, credential, host, or Computer. Focus Desk is the only human product interface. Regency is governance inside that interface, stored in PostgreSQL. There is no second governance database and no second primary application.

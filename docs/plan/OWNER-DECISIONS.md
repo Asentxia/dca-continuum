@@ -214,3 +214,37 @@ tasks. A newer file or an agent recommendation is not approval.
 
 Production BLOCKED; scheduler HELD; canary NO-GO. Merges, releases and live gate
 activation require their own authorization and evidence.
+
+
+## D13 — authorized offline implementation sprint, 2026-10-15
+
+The owner explicitly authorizes isolated local development, ordinary pinned development
+dependencies without spending, owned disposable fixtures, additive E2 migration and
+tests, restricted pinned NEXUS/AEON integration after file-level rights/dependency/security
+review, and small local Git commits/portable bundle for the owner's independent audit.
+This supersedes earlier report-only/implementation-held instructions **within this scope**.
+It does not waive the frozen safety/recovery contracts or change D01–D12 architecture.
+
+- E2 first slice: one exact source, one PRIVATE/quarantined/UNVERIFIED result;
+  ContextService/PostgreSQL remain authoritative. No release/share/effect permission.
+- Logical withdrawal/access denial and fail-closed recovery interfaces are authorized.
+  Preserve provisional90-day ordinary content-free audit and30-day verified completed
+  disposable retry defaults, excluding immutable safety/replay/unresolved/legal material.
+  No irreversible physical purge or invented backup deadline.
+- Offline deterministic integration is the milestone; it is **not** D10 real-model
+  autonomy or live authentication. The missing live model/WorkOS/hosting inputs do not
+  block this scoped offline work.
+- Donor pins remain NEXUS e1c3d3c75d58f609c617e7a87cb05e84ea437d64 and
+  AEON-IQ d5866e85edb3a7f7ea7186854655981ca73760f4 in their historical recovery
+  mirrors. File/dependency clearance precedes reuse; public redistribution remains held.
+- Subagents and separate internal reviewers are authorized. They supplement, not replace,
+  the owner's final independent audit. No change is accepted/merged solely by its author.
+- Official destination is Asentxia/dca-continuum. Existing public history/README/PR work
+  must be preserved. No first public code push, merge, visibility/history/license change
+  is authorized by this sprint; deliver a local Git branch/bundle unless separately cleared.
+- No spending, live provider/model calls, new live credentials, protected external writes,
+  production/shared database reset, deployment, shadow or canary.
+
+ENG-001–052 retain their acceptance requirements. Sprint-specific coverage/evidence must
+be bound to actual source and executed tests; related work does not close whole tasks.
+Production BLOCKED; scheduler HELD; canary NO-GO.

@@ -26,3 +26,7 @@ dist-product/
 !web/.env.example
 
 web/next-env.d.ts
+
+# Local native dependency/build outputs; reviewed native source remains tracked
+vendor/**/target/
+native/**/target/
