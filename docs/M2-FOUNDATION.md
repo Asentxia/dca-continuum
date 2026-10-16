@@ -1,0 +1,6 @@
+# M2 foundation
+New additive schema `ct`; old source remains untouched. Owner NOLOGIN; governor may mutate governance but not effect result; controller may mutate outcome but not grants/approval bindings; tenant readers are session_user-mapped and cannot change mapping; provider emulator role has its own schema with no domain access. Forced RLS plus composite tenant FKs, immutable binding trigger, expected-version updates, append-only events, locked evidence head and at-least-once outbox are enforced.
+
+No direct agent SQL login. All local database endpoints bind loopback. Local trust authentication is a test convenience, **not a production configuration**; compromised host-root is outside tested containment. Production uses TLS and actual SCRAM/IAM/secret manager credentials, private network and separate managed roles. Governor/controller privileges are intentionally broad within their trusted domain; their compromise is not contained as if they were an ordinary agent.
+
+Restore: logical domain dump excludes provider truth. A recovered database must be brought up with controller disabled; rotate independently configured fence, set `ct.control.blocked=true`, reconcile missing remote effects before activation. The fixture performs that sequence and rejects an old fence. WAL/PITR, synchronous replication/HA and region fencing remain unpassed release gates.

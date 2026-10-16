@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.local/
+__pycache__/
+*.pyc
+.env
+.env.*
+.npmrc
+*.pem
+*.key
+*.dump
+*.sqlite
+*.sqlite-*
+*.zip
+
+web/.next/
+web/test-results/
+web/playwright-report/
+*.tsbuildinfo
+
+# Reproducible CI/local outputs, never product source
+.artifacts/
+web/.next-local-test/
+dist-product/
+
+!web/.env.example
+
+web/next-env.d.ts
+
+# Local native dependency/build outputs; reviewed native source remains tracked
+vendor/**/target/
+native/**/target/

@@ -1,0 +1,19 @@
+name: Main post-merge verification
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-post-merge-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  full:
+    name: Verify actual merged commit
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml

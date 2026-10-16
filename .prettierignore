@@ -1,0 +1,8 @@
+node_modules/
+.artifacts/
+.local/
+dist/
+dist-product/
+web/.next/
+web/.next-local-test/
+web/next-env.d.ts

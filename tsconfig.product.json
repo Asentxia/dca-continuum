@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-product"
+  },
+  "include": [
+    "src/**/*.ts",
+    "scheduler/**/*.ts"
+  ],
+  "exclude": [
+    "tests",
+    "internal",
+    "node_modules",
+    "web"
+  ]
+}

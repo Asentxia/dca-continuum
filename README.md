@@ -1,5 +1,7 @@
 # Continuum
 
+> **Implementation import:** the recovered codebase is now included for review. Read [import provenance and verification status](docs/import/GITHUB-IMPORT.md) and the [recovered implementation guide](docs/import/RECOVERED-README.md). This is a development baseline, not production or live-model approval.
+
 ### A persistent, governed operating environment for autonomous intelligence.
 
 **Continuum, by Asentxia Systems** · **Architecture:** Distributed Cognitive Architecture (DCA) · **Principal:** VERA · **Governance:** The Regency

@@ -1,0 +1,6 @@
+{
+ "enabled":false,"approvalReference":null,"managedClusterRef":null,"backupWalStoreRef":null,"independentFenceStoreRef":null,"authorityJournalRef":null,"RPOSeconds":null,"RTOSeconds":null,
+ "runtime":"restricted non-owner roles, TLS verification, private endpoints; never local trust auth",
+ "recovery":"independent fence must block before restore; current revocations and all possible backup-window effects must reconcile before exact approved activation",
+ "qualification":"NOT RUN: cloud failover/PITR/HA/region and complete external inventory"
+}

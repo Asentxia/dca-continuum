@@ -1,0 +1,289 @@
+{
+  "overall": "BLOCKED",
+  "schedulerDecision": "HELD",
+  "canary": "NO-GO",
+  "allowedStatuses": [
+    "PASS",
+    "PARTIAL",
+    "FAIL",
+    "NOT RUN"
+  ],
+  "gates": [
+    {
+      "id": "P1",
+      "gate": "Production user/machine identity and authority",
+      "status": "PARTIAL",
+      "evidence": "14 implementation checks plus human HTTP approval, online issuance and disabled-identity denial; test issuer/key only",
+      "blocking": "Approved real WorkOS/identity issuer/audience, user MFA/session claims and bound workload identity; TLS/auth/key custody staging integration",
+      "liveAttempt": {
+        "status": "NOT RUN",
+        "outcome": "Deferred owner-controlled staging prerequisites; offline engineering continued",
+        "evidence": "qualification/evidence/live-p1-preflight/PREFLIGHT-RESULT.json"
+      },
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-IDENTITY, PRODUCT-BACKEND, REFERENCE-SCHEDULER, CONTROLLER-HTTPS",
+        "scope": "Local test issuer/MFA/workload and 5.5-second wait only; no real sign-in/renewable platform identity"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "P2",
+      "gate": "Real safe provider adapter and verification",
+      "status": "PARTIAL",
+      "evidence": "6 checks with actual GitHub GET responses, commit/tree readback, client timeout/lost-response/readback-outage injection and immutable payload binding",
+      "blocking": "Public immutable read does not exercise credentialled mutations, provider idempotency retention/stale key or protected effect isolation",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-CONTROLLER, SECURITY-RESOURCE, CONTROLLER-HTTPS",
+        "scope": "Fixture effect/lost-ack/read-back cases; prior real public GitHub GET preserved, protected mutation/idempotency window NOT RUN"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "P3",
+      "gate": "Production computer/VM isolation",
+      "status": "NOT RUN",
+      "blocking": "Approved managed VM account/staging placement, live egress/IAM, tenant/DNS/SSRF/redirect tests and destruction/generation fence",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "COMPUTER-ISOLATION",
+        "scope": "Actual local UID/network namespace, driver mocks and generation fences; no managed VM or live egress/IAM"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "P4",
+      "gate": "Production PostgreSQL HA/backups/PITR",
+      "status": "NOT RUN",
+      "blocking": "Approved disposable HA cluster, backup/WAL store, RPO/RTO, failover/restore permissions and independent recovery fence",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "implementation/evidence/dr-lab/RESULT.json",
+        "scope": "Actual local PostgreSQL streaming/failover/WAL-PITR and outside-backup fixture fence; not cloud HA/DR"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "P5",
+      "gate": "Final scheduler and real 24-hour comparison",
+      "status": "NOT RUN",
+      "blocking": "P1-P4 plus stable 24-hour staging host, compatible identity renewal, real provider, native incompatible version recovery and cost/toil metrics",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "REFERENCE-SCHEDULER, STAGING-PREPARATION",
+        "scope": "Real local Temporal/pg-boss 5.5-second bounded jobs, expired test token/fresh scope, retained v1/replay/v2; no 24-hour/native live deployment/host/service/economics"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R1",
+      "gate": "No bypass",
+      "status": "PARTIAL",
+      "evidence": "Accepted local namespace/UID tests rerun; strict operation/identity requests and pinned read-only transport",
+      "blocking": "Live VM/browser/protected provider network/credential boundary",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-CONTROLLER, COMPUTER-ISOLATION, CONTROLLER-HTTPS",
+        "scope": "Local no-bypass/strict transports only"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R2",
+      "gate": "Fault/race",
+      "status": "PARTIAL",
+      "evidence": "Accepted 14 controller regression groups plus real-read client fault injection",
+      "blocking": "Production host/service/provider-boundary race and partial-effects battery",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-CONTROLLER, COMPUTER-ISOLATION, dr-lab, CONTROLLER-HTTPS",
+        "scope": "Local race/process/database/fixture provider boundaries"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R3",
+      "gate": "Authority correctness",
+      "status": "PARTIAL",
+      "evidence": "Exact approvals, enrollment-derived tenant, machine anti-escalation, fresh bounded issuance, old-token identity fencing",
+      "blocking": "Live IdP sessions/workload binding and long-duration renewal; offline privileged recovery observation contract",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-IDENTITY, PRODUCT-BACKEND, EVIDENCE-RECOVERY",
+        "scope": "Local enrollment, anti-escalation, approvals, identity/recovery fences; external MFA/workload/cluster operator still unqualified"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R4",
+      "gate": "Memory isolation",
+      "status": "PARTIAL",
+      "evidence": "Baseline tenant/version/corruption checks rerun",
+      "blocking": "Production memory ingestion/retrieval/poisoning, quarantine/retention/deletion pipeline",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "CONTEXT-ARTIFACT",
+        "scope": "Structured context/version/quarantine/expiry/erasure, tenant isolation and artifact corruption; not full semantic/vector/model pipeline"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R5",
+      "gate": "Evidence truth",
+      "status": "PARTIAL",
+      "evidence": "Concurrent chain, transaction/immutability regression and saved real provider responses",
+      "blocking": "Credentialled effect verifier, independent external anchors and retention/redaction review",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-FOUNDATION, EVIDENCE-RECOVERY, STAGING-PREPARATION",
+        "scope": "Transactional chains, read-only reconciliation, independent local anchors/conditional cloud mock; no live external immutability/protected-effect truth"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R6",
+      "gate": "Production computer destruction/recovery",
+      "status": "NOT RUN",
+      "blocking": "Actual disposable VM/host destruction, manifest restore and proof stale host cannot use broker",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "COMPUTER-ISOLATION, CONTEXT-ARTIFACT",
+        "scope": "Real local process/scratch destruction and verified private reconstruction; no actual managed host loss"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R7",
+      "gate": "Production DR",
+      "status": "NOT RUN",
+      "blocking": "PITR/HA/region isolation and backup-window real-effect reconciliation under recovery fence",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "dr-lab, EVIDENCE-RECOVERY",
+        "scope": "Local physical/WAL restore, lost binding import and journal/read-back; no regional/cloud completeness certification"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R8",
+      "gate": "Compromised agent/worker containment",
+      "status": "PARTIAL",
+      "evidence": "Local isolated agent regressions and assignment/key-boundary rejection",
+      "blocking": "Production task-scoped machine identity, shared scheduler-role elimination, actual VM/worker/credential attack tests",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "BASELINE-CONTROLLER, COMPUTER-ISOLATION, BASELINE-IDENTITY",
+        "scope": "Local isolated agent and scoped assignment; untrusted workflow-worker/VM credential and metadata custody still needs staging"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R9",
+      "gate": "Resource/spend controls",
+      "status": "PARTIAL",
+      "evidence": "Accepted per-grant transactional reservation and budget tests rerun; qualification only zero-cost read",
+      "blocking": "Real token/money billing, quota/retry-storm/concurrency/storage enforcement",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "SECURITY-RESOURCE",
+        "scope": "Concurrent bounded jobs/storage/test units, unknown holds, immutable pre-I/O upload reservation, rate bounds; real money/token/cloud billing not qualified"
+      },
+      "liveStatus": "PARTIAL",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "R10",
+      "gate": "Independent security review",
+      "status": "NOT RUN",
+      "blocking": "Independent reviewer and access to deployed trust-boundary code/config; local self-review is not independent",
+      "localEvidence": {
+        "status": "NOT RUN",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "implementation/docs/SECURITY-SELF-REVIEW.md",
+        "scope": "Self-review only; independent review NOT RUN"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "M6",
+      "gate": "Shadow deployment preparation/activation",
+      "status": "NOT RUN",
+      "blocking": "Production safety gates, final scheduler and approved staging/deployment mapping",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "MIGRATION-PREPARATION",
+        "scope": "Dry-run mapping/eligibility only; no shadow deployment"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    },
+    {
+      "id": "M7",
+      "gate": "Single-principal canary",
+      "status": "NOT RUN",
+      "blocking": "All relevant staging/release gates plus explicit owner approval; legacy patches remain undeployed",
+      "localEvidence": {
+        "status": "PASS",
+        "environment": "LOCAL_FIXTURE",
+        "evidence": "MIGRATION-PREPARATION",
+        "scope": "NO-GO enforcement model only; no canary"
+      },
+      "liveStatus": "NOT RUN",
+      "externalPrerequisites": "OWNER-ACTION-CHECKLIST.md"
+    }
+  ],
+  "narrowSubchecks": [
+    {
+      "gate": "Actual read-only public commit lookup and second-endpoint verification",
+      "status": "PASS",
+      "scope": "Exactly pinned public repository/commit/tree; no protected write effect or authenticated user identity inferred"
+    },
+    {
+      "gate": "Live connection metadata inspection",
+      "status": "PASS",
+      "scope": "GitHub authenticated profile; Cloudflare account and Zero Trust org/JWKS reachable, zero Access apps; no new resource created"
+    },
+    {
+      "gate": "Provider stale mutation idempotency window",
+      "status": "NOT RUN",
+      "scope": "GET contract has no mutation idempotency window; not passed by a stale JWT/domain digest check"
+    }
+  ],
+  "revision": "offline-implementation-0.3",
+  "canonPromotion": false,
+  "externalPrerequisitesDeferred": true,
+  "safeEngineeringBlockedByP1": false,
+  "liveIdentityTestsStatus": "NOT RUN",
+  "localNodeGroups": 121,
+  "mandatoryProductionGatesPassed": 0
+}

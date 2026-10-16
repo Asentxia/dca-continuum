@@ -1,0 +1,42 @@
+{
+  "status": "VERIFIED",
+  "sourceCommit": "3c197ddb57c13db397e30c48e4ceb6949d3a8ee9",
+  "sourceFingerprint": {
+    "files": 153,
+    "scope": "Implemented source and verification harness; generated .artifacts/core/docs excluded",
+    "sourceDigest": "371726e5c6c0f60c25202f13d8a2978e577dff4fdb6b5c1361c879c2692b5572"
+  },
+  "verifiedAt": "2026-10-09T06:31:34.934868+00:00",
+  "historyRewritten": false,
+  "trackedFiles": 975,
+  "trackedBytes": 9440766,
+  "whatArchived": "Every tracked file at the reviewed commit, all historical/raw evidence, complete feature-branch Git history. No installed dependencies or local databases.",
+  "recovery": [
+    {
+      "name": "CONTINUUM-CANONICAL-SOURCE-EVIDENCE.zip",
+      "sha256": "83847910fcee986f0f0f9db79c0dd529e24b0d7a38e2325d6aae11543da2cb82",
+      "location": "Verified download delivered with the original handoff; filename and SHA-256 identify the exact immutable artifact. A fresh download accompanies the cleanup handoff."
+    },
+    {
+      "name": "CONTINUUM-CANONICAL-LOCAL.bundle",
+      "sha256": "d312a896d67115f74285a9a9e5a4fd79f75765efc4bcdd3ebce846e5a0f811c4",
+      "location": "Verified download delivered with the original handoff; filename and SHA-256 identify the exact immutable artifact. A fresh download accompanies the cleanup handoff."
+    }
+  ],
+  "sourceRecovery": "https://github.com/Adaptive-Liquidity/notion-continuum/tree/3c197ddb57c13db397e30c48e4ceb6949d3a8ee9",
+  "checks": [
+    "clean starting checkout",
+    "root SHA256SUMS",
+    "tested-source equality",
+    "ZIP CRC",
+    "archive-wide SHA256",
+    "all tracked bytes match ZIP",
+    "Git bundle verified; starting commit present"
+  ],
+  "recoveryInstructions": [
+    "Verify the recorded archive checksum before use.",
+    "git clone CONTINUUM-CANONICAL-LOCAL.bundle recovered-continuum",
+    "git -C recovered-continuum checkout 3c197ddb57c13db397e30c48e4ceb6949d3a8ee9",
+    "All original tracked bytes are also in CONTINUUM-CANONICAL-SOURCE-EVIDENCE.zip under notion-continuum/."
+  ]
+}

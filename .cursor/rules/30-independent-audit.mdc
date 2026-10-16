@@ -1,0 +1,22 @@
+---
+description: Independent-audit remediation priority for Continuum
+alwaysApply: true
+---
+
+# Independent audit priority
+
+Read `docs/reconciliation/FINAL-PRODUCT-RECONCILIATION.md` before merge-readiness work. The October 9 audit note may exist only as an untracked local handoff; do not require that path.
+
+The following findings stay closed only while their regressions pass on the current tree. A later failure reopens the finding:
+
+- H01: stale/pre-rotation workload credential can regain post-rotation authority.
+- H02: recovery activation can open after independent journal drift.
+- H03: backup utility accepts unsafe target/output conditions.
+- M01: MFA freshness after lock contention.
+- M02: canonical GitHub provider identifier/product proposal-path mismatch.
+- M03: tenant-local creator/actor FK integrity.
+- M04: distributed font notice/provenance packaging.
+- L01: false INCOMPLETE marker after successful canonical run.
+- L02: cleanup/disposition documentation inconsistency.
+
+A later commit may have fixed some of these. Do not assume that. Re-run the supplied reproducers or equivalent exact regressions and report evidence.

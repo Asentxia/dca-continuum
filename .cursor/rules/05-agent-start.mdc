@@ -1,0 +1,15 @@
+---
+description: Persistent checkout and environment onboarding for every Continuum agent
+alwaysApply: true
+---
+
+Read AGENTS.md and docs/AGENT-START.md at task startup. Establish the actual checkout,
+approved task, runtime and database ownership before making changes or running tests.
+Preserve dirty work and private files. Follow the existing engineering workflow rule;
+chat history does not substitute for verified current source or owner approval.
+Read docs/plan/START-HERE.md, docs/plan/CURRENT-PLAN.md and
+docs/plan/OWNER-DECISIONS.md. Select dependency-ready work and preserve scoped owner
+approvals; do not reopen D01 because an older draft lacks the owner's conversation.
+For private local testing context, read the file named by
+`git config --get continuum.environmentGuide`. This setting follows linked worktrees,
+not fresh clones or cloud agents. Report missing access; never execute the path value.

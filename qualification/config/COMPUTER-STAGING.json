@@ -1,0 +1,17 @@
+{
+  "enabled": false,
+  "scope": "disposable staging only; no resource creation performed",
+  "approvalReference": null,
+  "blueprintId": null,
+  "networkPolicyId": null,
+  "credentialRef": null,
+  "requiredPolicy": {
+    "defaultEgress": "DENY",
+    "allowOnly": ["configured controller API", "approved renewable workload identity source", "approved immutable artifact endpoints"],
+    "deny": ["provider protected endpoints", "database endpoints", "cloud metadata except approved workload-identity broker", "cross-tenant placements", "arbitrary DNS/redirect targets"],
+    "agentSecrets": [],
+    "privilegedProviderGateways": false,
+    "publicTunnel": false,
+    "placementFence": "online principal generation and exact placement binding"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "repository": "Adaptive-Liquidity/AEON-IQ-temp",
+  "pin": "d5866e85edb3a7f7ea7186854655981ca73760f4",
+  "tree": "9ecdfd3663c69e0d5304b9e29ab4cf01dc5c460c",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 Adaptive Liquidity",
+  "clearance": "EXACT_FILES_REVIEWED_FOR_LOCAL_OFFLINE_IMPLEMENTATION_ONLY",
+  "publicDistribution": "HELD",
+  "files": [
+    {
+      "source": "src/memory/amp/augmenter.rs",
+      "destination": "vendor/aeon/augmenter.rs",
+      "gitBlob": "9d494c6d9d67c7f8a58e9ca7d5dab67e8cae0f8b",
+      "sha256": "86f974d75502d9f57c0790dbf3b61253b1dd60114d01d67910de008da5faca8c",
+      "modification": "NONE; exact original bytes"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "vendor/aeon/LICENSE",
+      "gitBlob": "e542a3d38bf2c33a146ae32f151d20f665f83fbb",
+      "sha256": "046d505b195d400a42747cc576219b551d2989a302ebd2b2aea5c5d5609db3f9",
+      "modification": "NONE; exact original bytes"
+    }
+  ],
+  "runtimeDependencyClosure": [
+    "Rust standard library; local numeric shims only",
+    "existing Node node:child_process/node:path builtins"
+  ],
+  "excluded": [
+    "all other donor files",
+    "donor Cargo.toml/Cargo.lock and all registry crates",
+    "public/proxy/management servers",
+    "donor credentials/tenancy routes",
+    "DB store, workers, extraction loop, embeddings/providers"
+  ],
+  "adaptations": [
+    "Uuid maps to local ordinal",
+    "CoAccessGraph reads bounded request-local numeric weights only",
+    "PressureManager reserved unused type",
+    "numeric bounded process bridge; no provider/model/DB I/O"
+  ],
+  "gates": {
+    "production": "BLOCKED",
+    "scheduler": "HELD",
+    "canary": "NO-GO"
+  }
+}
