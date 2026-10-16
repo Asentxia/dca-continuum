@@ -79,12 +79,40 @@ for (const example of [
   },
   { id: 'draft-summary', title: 'Prepare the board summary', state: 'planned' },
 ]) {
-  if (
-    !(await missing("SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1", [
-      't-' + example.id,
-    ]))
-  )
-    continue;
+  const taskId = 't-' + example.id;
+  const taskExists = !(await missing(
+    "SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1",
+    [taskId],
+  ));
+  const linked = !(await missing(
+    "SELECT 1 FROM ct.work_coordination WHERE tenant='a' AND task=$1 AND project='operations'",
+    [taskId],
+  ));
+  const stateReady =
+    example.state === 'pending' || example.state === 'planned'
+      ? true
+      : !(await missing(
+          "SELECT 1 FROM ct.operations WHERE tenant='a' AND id=$1 AND state=$2",
+          [
+            example.id,
+            example.state === 'unknown'
+              ? 'UNKNOWN'
+              : example.state === 'verified'
+                ? 'COMMITTED'
+                : 'DENIED',
+          ],
+        ));
+  const assignmentsCleared =
+    example.id !== 'draft-summary' ||
+    (await missing(
+      "SELECT 1 FROM ct.assignments WHERE tenant='a' AND operation=$1",
+      [example.id],
+    ));
+  if (taskExists && linked && stateReady && assignmentsCleared) continue;
+  if (taskExists)
+    throw Error(
+      `Local fixture example ${example.id} is incomplete. Export CT_RESET_CONSOLE_FIXTURE=yes and run npm run dev:console:reset`,
+    );
   const { x } = await f.intent(
     example.id,
     ['unknown', 'verified', 'denied'].includes(example.state),
@@ -116,11 +144,19 @@ for (const example of [
     await f.controller.dispatch(cap, x.id);
   }
 }
-if (
-  await missing("SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1", [
-    'work-next-week',
-  ])
-) {
+const nextWeekExists = !(await missing(
+  "SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1",
+  ['work-next-week'],
+));
+const nextWeekLinked = !(await missing(
+  "SELECT 1 FROM ct.work_coordination WHERE tenant='a' AND task=$1 AND project='operations'",
+  ['work-next-week'],
+));
+if (nextWeekExists && !nextWeekLinked)
+  throw Error(
+    'Local fixture example work-next-week is incomplete. Export CT_RESET_CONSOLE_FIXTURE=yes and run npm run dev:console:reset',
+  );
+if (!nextWeekExists) {
   await f.product.createTask(owner, {
     id: 'work-next-week',
     principal: f.principal,
@@ -130,11 +166,19 @@ if (
   });
   await coord.link(owner, 'work-next-week', 'operations', 0);
 }
-if (
-  await missing("SELECT 1 FROM ct.incidents WHERE tenant='a' AND id=$1", [
-    'unknown-ledger',
-  ])
-) {
+const incidentExists = !(await missing(
+  "SELECT 1 FROM ct.incidents WHERE tenant='a' AND id=$1",
+  ['unknown-ledger'],
+));
+const incidentNoticeExists = !(await missing(
+  "SELECT 1 FROM ct.notifications WHERE tenant='a' AND id=$1",
+  ['ledger-notice'],
+));
+if (incidentExists && !incidentNoticeExists)
+  throw Error(
+    'Local fixture example unknown-ledger is incomplete. Export CT_RESET_CONSOLE_FIXTURE=yes and run npm run dev:console:reset',
+  );
+if (!incidentExists) {
   await gov.query(
     "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
     [f.principal],
