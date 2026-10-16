@@ -71,7 +71,9 @@ function startApi(port: number, key: string) {
 async function stopApi(child: ChildProcess) {
   if (child.exitCode !== null) return;
   child.kill('SIGTERM');
-  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  const exited = new Promise<void>((resolve) =>
+    child.once('exit', () => resolve()),
+  );
   await Promise.race([
     exited,
     new Promise((_, reject) =>
@@ -100,11 +102,24 @@ async function command(
 
 test('tasks and VERA profiles survive an API restart', async () => {
   Object.assign(process.env, localEnv());
-  const bin = process.env.CT_PG_BIN ? path.join(process.env.CT_PG_BIN, 'psql') : 'psql';
+  const bin = process.env.CT_PG_BIN
+    ? path.join(process.env.CT_PG_BIN, 'psql')
+    : 'psql';
   const { execFileSync } = await import('node:child_process');
   const dataDirectory = execFileSync(
     bin,
-    ['-h', '127.0.0.1', '-p', '55432', '-U', 'localtest', '-d', 'postgres', '-Atc', 'SHOW data_directory'],
+    [
+      '-h',
+      '127.0.0.1',
+      '-p',
+      '55432',
+      '-U',
+      'localtest',
+      '-d',
+      'postgres',
+      '-Atc',
+      'SHOW data_directory',
+    ],
     { encoding: 'utf8' },
   ).trim();
   assert.equal(
@@ -121,84 +136,105 @@ test('tasks and VERA profiles survive an API restart', async () => {
   const suffix = randomBytes(4).toString('hex');
   const veraId = 'restart-vera-' + suffix;
   const taskId = 'restart-task-' + suffix;
-  const first = startApi(port, key);
-  await ready('http://127.0.0.1:' + port + '/read', first.child, first.output);
-  const login = await fetch('http://127.0.0.1:' + port + '/__fixture/login', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-fixture-server-key': key,
-    },
-    body: JSON.stringify({ tenant: 'a' }),
-  });
-  assert.equal(login.status, 200);
-  const token = (await login.json()).token as string;
-  await command(port, token, {
-    schema_version: 1,
-    idempotency_key: 'create-' + veraId,
-    kind: 'create_vera',
-    target: veraId,
-    expected_version: 0,
-    input: {
-      name: 'Persistent VERA ' + suffix,
-      description: 'Created before restart',
-    },
-  });
-  await command(port, token, {
-    schema_version: 1,
-    idempotency_key: 'edit-' + veraId,
-    kind: 'update_vera_profile',
-    target: veraId,
-    expected_version: 1,
-    input: {
-      name: 'Edited persistent VERA ' + suffix,
-      description: 'Edited before restart',
-    },
-  });
-  await command(port, token, {
-    schema_version: 1,
-    idempotency_key: 'create-' + taskId,
-    kind: 'create_task',
-    target: taskId,
-    expected_version: 0,
-    input: {
-      principal: 'p-focus',
-      objective: 'Persistent task ' + suffix,
-      deadline: new Date(Date.now() + 3600000).toISOString(),
-      organization: 'focus-org',
-      mandate: 'focus-mandate',
-      mandateVersion: 1,
-    },
-  });
-  const db = pool('localtest', database);
-  const before = async () => ({
-    task: (
-      await db.query(
-        'SELECT id,objective,organization,mandate,mandate_version::text AS mandate_version FROM ct.tasks WHERE tenant=$1 AND id=$2',
-        ['a', taskId],
-      )
-    ).rows[0],
-    profile: (
-      await db.query(
-        'SELECT id,name,description,revision::text AS revision,created_by FROM ct.vera_profiles WHERE tenant=$1 AND id=$2',
-        ['a', veraId],
-      )
-    ).rows[0],
-    tasks: Number(
-      (await db.query("SELECT count(*) AS n FROM ct.tasks WHERE tenant='a'")).rows[0].n,
-    ),
-    profiles: Number(
-      (await db.query("SELECT count(*) AS n FROM ct.vera_profiles WHERE tenant='a'")).rows[0].n,
-    ),
-  });
-  const saved = await before();
-  assert.equal(saved.task.objective, 'Persistent task ' + suffix);
-  assert.equal(saved.profile.name, 'Edited persistent VERA ' + suffix);
-  assert.equal(saved.profile.revision, '2');
-  await stopApi(first.child);
-  const second = startApi(port, key);
+  let first: ReturnType<typeof startApi> | undefined;
+  let second: ReturnType<typeof startApi> | undefined;
+  let db: ReturnType<typeof pool> | undefined;
   try {
-    await ready('http://127.0.0.1:' + port + '/read', second.child, second.output);
+    const firstApi = startApi(port, key);
+    first = firstApi;
+    await ready(
+      'http://127.0.0.1:' + port + '/read',
+      firstApi.child,
+      firstApi.output,
+    );
+    const login = await fetch('http://127.0.0.1:' + port + '/__fixture/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-fixture-server-key': key,
+      },
+      body: JSON.stringify({ tenant: 'a' }),
+    });
+    assert.equal(login.status, 200);
+    const token = (await login.json()).token as string;
+    await command(port, token, {
+      schema_version: 1,
+      idempotency_key: 'create-' + veraId,
+      kind: 'create_vera',
+      target: veraId,
+      expected_version: 0,
+      input: {
+        name: 'Persistent VERA ' + suffix,
+        description: 'Created before restart',
+      },
+    });
+    await command(port, token, {
+      schema_version: 1,
+      idempotency_key: 'edit-' + veraId,
+      kind: 'update_vera_profile',
+      target: veraId,
+      expected_version: 1,
+      input: {
+        name: 'Edited persistent VERA ' + suffix,
+        description: 'Edited before restart',
+      },
+    });
+    await command(port, token, {
+      schema_version: 1,
+      idempotency_key: 'create-' + taskId,
+      kind: 'create_task',
+      target: taskId,
+      expected_version: 0,
+      input: {
+        principal: 'p-focus',
+        objective: 'Persistent task ' + suffix,
+        deadline: new Date(Date.now() + 3600000).toISOString(),
+        organization: 'focus-org',
+        mandate: 'focus-mandate',
+        mandateVersion: 1,
+      },
+    });
+    const databasePool = pool('localtest', database);
+    db = databasePool;
+    const before = async () => ({
+      task: (
+        await databasePool.query(
+          'SELECT id,objective,organization,mandate,mandate_version::text AS mandate_version FROM ct.tasks WHERE tenant=$1 AND id=$2',
+          ['a', taskId],
+        )
+      ).rows[0],
+      profile: (
+        await databasePool.query(
+          'SELECT id,name,description,revision::text AS revision,created_by FROM ct.vera_profiles WHERE tenant=$1 AND id=$2',
+          ['a', veraId],
+        )
+      ).rows[0],
+      tasks: Number(
+        (
+          await databasePool.query(
+            "SELECT count(*) AS n FROM ct.tasks WHERE tenant='a'",
+          )
+        ).rows[0].n,
+      ),
+      profiles: Number(
+        (
+          await databasePool.query(
+            "SELECT count(*) AS n FROM ct.vera_profiles WHERE tenant='a'",
+          )
+        ).rows[0].n,
+      ),
+    });
+    const saved = await before();
+    assert.equal(saved.task.objective, 'Persistent task ' + suffix);
+    assert.equal(saved.profile.name, 'Edited persistent VERA ' + suffix);
+    assert.equal(saved.profile.revision, '2');
+    await stopApi(first.child);
+    second = startApi(port, key);
+    await ready(
+      'http://127.0.0.1:' + port + '/read',
+      second.child,
+      second.output,
+    );
     assert.deepEqual(await before(), saved);
     const again = await fetch('http://127.0.0.1:' + port + '/__fixture/login', {
       method: 'POST',
@@ -218,7 +254,10 @@ test('tasks and VERA profiles survive an API restart', async () => {
     assert.equal(body.items[0].title, 'Edited persistent VERA ' + suffix);
     assert.equal(body.items[0].fields.profileRevision, 2);
   } finally {
-    await stopApi(second.child);
-    await db.end();
+    await Promise.allSettled([
+      first ? stopApi(first.child) : Promise.resolve(),
+      second ? stopApi(second.child) : Promise.resolve(),
+      db ? db.end() : Promise.resolve(),
+    ]);
   }
 });
