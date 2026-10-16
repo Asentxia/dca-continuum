@@ -131,13 +131,33 @@ def chown(spec: str, path: str, root: str) -> None:
     uid, gid = int(match.group(1)), int(match.group(2))
     if not 110000 <= uid <= 199999 or gid == 0 or gid > 65534:
         deny("refusing owner")
-    if not os.path.isabs(path) or "\x00" in path or os.path.islink(path):
+    # Open each component without following symlinks, then bind ownership to
+    # the opened directory inode. Path checks followed by os.chown(path) race
+    # with a caller replacing either the child or an ancestor with a symlink.
+    if any(
+        not os.path.isabs(value)
+        or "\x00" in value
+        or value != os.path.normpath(value)
+        or ".." in value.split("/")
+        for value in (root, path)
+    ) or os.path.dirname(path) != root:
         deny("refusing path")
-    real = os.path.realpath(path)
-    parent = os.path.realpath(root)
-    if os.path.dirname(real) != parent or not os.path.isdir(real):
-        deny("refusing path")
-    os.chown(real, uid, gid)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open("/", flags)
+    try:
+        for component in root.split("/")[1:]:
+            next_fd = os.open(component, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        child_fd = os.open(os.path.basename(path), flags, dir_fd=fd)
+        try:
+            os.fchown(child_fd, uid, gid)
+        finally:
+            os.close(child_fd)
+    except OSError:
+        deny("refusing path or ownership operation")
+    finally:
+        os.close(fd)
 
 
 def process_uid(pid: str) -> int:

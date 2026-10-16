@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: main-post-merge-${{ github.ref }}
+  group: main-post-merge-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

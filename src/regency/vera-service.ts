@@ -43,7 +43,8 @@ export const VeraProfileUpdateSchema = z
 export type VeraCreateInput = z.infer<typeof VeraCreateSchema>;
 export type VeraProfileUpdateInput = z.infer<typeof VeraProfileUpdateSchema>;
 
-const noAuthority = {
+// Constant effect-denial flags, not authentication data or passwords.
+const deniedEffectFlags = {
   effectAuthority: false,
   workflowAdmitted: false,
   externalEffect: false,
@@ -95,7 +96,7 @@ function creationResult(
       executionMode: 'PAUSED',
       availability: 'requires_setup',
     },
-    ...noAuthority,
+    ...deniedEffectFlags,
   };
 }
 
@@ -109,7 +110,7 @@ function profileResult(row: Record<string, any>): VeraProfileResult {
     description: row.description,
     revision,
     createdBy: row.created_by,
-    ...noAuthority,
+    ...deniedEffectFlags,
   };
 }
 
@@ -206,7 +207,7 @@ export class VeraService {
         actor: i.id,
         creationDigest: digest,
         ...creationResult(x.id, i.id, false).creation,
-        ...noAuthority,
+        ...deniedEffectFlags,
       });
       // The evidence-head lock may also wait. Failure rolls back both records
       // and the append, including when this is inside a command transaction.
@@ -248,7 +249,7 @@ export class VeraService {
         profileDigest: sha(
           canonical({ name: x.name, description: x.description }),
         ),
-        ...noAuthority,
+        ...deniedEffectFlags,
       });
       await enrolled(c, actor, true);
       return result;

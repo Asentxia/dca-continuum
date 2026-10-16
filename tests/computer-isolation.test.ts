@@ -240,11 +240,19 @@ test('Computer actual separate UID/network process cannot read credentials or te
     peer = driver.details(other.id);
   const secret = path.resolve('.local/computer-controller-fixture.secret');
   await fs.writeFile(secret, randomBytes(32), { mode: 0o600 });
-  const probe = `const fs=require('node:fs'),net=require('node:net'),cp=require('node:child_process');(async()=>{const checks={uid:process.getuid()===${d.uid},noCapabilities:/CapEff:\\s+0+/.test(fs.readFileSync('/proc/self/status','utf8')),credentialBlocked:false,peerBlocked:false,dbBlocked:false,networkEscapeBlocked:cp.spawnSync('unshare',['--net']).status!==0};try{fs.readFileSync(${JSON.stringify(secret)})}catch{checks.credentialBlocked=true}try{fs.readdirSync(${JSON.stringify(peer.directory)})}catch{checks.peerBlocked=true}checks.dbBlocked=await new Promise(r=>{const s=net.connect({host:'127.0.0.1',port:55432},()=>{s.destroy();r(false)});s.on('error',()=>r(true));s.setTimeout(1500,()=>{s.destroy();r(true)})});console.log(JSON.stringify(checks));process.exit(Object.values(checks).every(Boolean)?0:1)})()`;
+  const probe = `const fs=require('node:fs'),net=require('node:net'),cp=require('node:child_process');const {expectedUid,secretPath,peerDirectory}=JSON.parse(fs.readFileSync(0,'utf8'));(async()=>{const checks={uid:process.getuid()===expectedUid,noCapabilities:/CapEff:\\s+0+/.test(fs.readFileSync('/proc/self/status','utf8')),credentialBlocked:false,peerBlocked:false,dbBlocked:false,networkEscapeBlocked:cp.spawnSync('unshare',['--net']).status!==0};try{fs.readFileSync(secretPath)}catch{checks.credentialBlocked=true}try{fs.readdirSync(peerDirectory)}catch{checks.peerBlocked=true}checks.dbBlocked=await new Promise(r=>{const s=net.connect({host:'127.0.0.1',port:55432},()=>{s.destroy();r(false)});s.on('error',()=>r(true));s.setTimeout(1500,()=>{s.destroy();r(true)})});console.log(JSON.stringify(checks));process.exit(Object.values(checks).every(Boolean)?0:1)})()`;
   const p = spawnSync(
     'sudo',
     nsenterIsolated(d.pid, d.uid, [process.execPath, '-e', probe]),
-    { encoding: 'utf8', timeout: 10000 },
+    {
+      encoding: 'utf8',
+      timeout: 10000,
+      input: JSON.stringify({
+        expectedUid: d.uid,
+        secretPath: secret,
+        peerDirectory: peer.directory,
+      }),
+    },
   );
   await fs.unlink(secret);
   assert.equal(p.status, 0, p.stderr + p.stdout);

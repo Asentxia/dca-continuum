@@ -14,8 +14,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: security-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   workflows:
@@ -55,6 +55,8 @@ jobs:
           tar -xzf "$RUNNER_TEMP/actionlint/archive.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
           python3 -m venv "$RUNNER_TEMP/zizmor"
           "$RUNNER_TEMP/zizmor/bin/pip" install --require-hashes --no-deps -r tools/ci/requirements-security.txt
+      - name: Test fixture privilege boundary without root
+        run: python3 -m unittest discover -s tools -p test_fixture_priv.py
       - name: Validate workflow correctness
         run: '"$RUNNER_TEMP/actionlint/actionlint" -color'
       - name: Reject high-confidence medium-or-higher workflow risks
