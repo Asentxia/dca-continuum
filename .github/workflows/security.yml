@@ -1,0 +1,130 @@
+name: Security verification
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '43 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflows:
+    name: Workflow security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested merge candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+      - name: Install checksum-pinned workflow scanners
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          curl --fail --silent --show-error --location \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint/archive.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint/archive.tar.gz" | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/actionlint/archive.tar.gz" -C "$RUNNER_TEMP/actionlint" actionlint
+          python3 -m venv "$RUNNER_TEMP/zizmor"
+          "$RUNNER_TEMP/zizmor/bin/pip" install --require-hashes --no-deps -r tools/ci/requirements-security.txt
+      - name: Validate workflow correctness
+        run: '"$RUNNER_TEMP/actionlint/actionlint" -color'
+      - name: Reject high-confidence medium-or-higher workflow risks
+        run: '"$RUNNER_TEMP/zizmor/bin/zizmor" --no-online-audits --min-severity medium --min-confidence high .github/workflows'
+
+  native-audit:
+    name: Native dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout tested merge candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+      - name: Install pinned Rust and advisory scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.94.0 --profile minimal
+          cargo +1.94.0 install cargo-audit --locked --version 0.22.2
+      - name: Audit native lockfile against current RustSec advisories
+        run: cargo +1.94.0 audit --file tools/nexus-native/Cargo.lock --json > native-dependency-audit.json
+      - name: Retain actual advisory result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: native-advisory-${{ github.event.pull_request.head.sha || github.sha }}
+          path: native-dependency-audit.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python, actions]
+    steps:
+      - name: Checkout tested merge candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+      - name: Initialize security analysis
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Analyze and publish security results
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
+        with:
+          category: /language:${{ matrix.language }}
+          wait-for-processing: true
+
+  codeql-gate:
+    name: CodeQL security gate
+    if: always()
+    needs: codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: read
+    steps:
+      - name: Require all analysis jobs to succeed
+        env:
+          ANALYSIS_RESULT: ${{ needs.codeql.result }}
+        run: test "$ANALYSIS_RESULT" = success
+      - name: Checkout tested merge candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+      - name: Test fail-closed alert policy
+        run: python3 tools/ci/test_codeql_gate.py
+      - name: Block high/critical security alerts and analysis errors
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_REF: ${{ github.ref }}
+          TESTED_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+        run: python3 tools/ci/check-codeql-alerts.py

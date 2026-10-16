@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
+  merge_group:
   workflow_dispatch:
   workflow_call:
 
@@ -25,7 +26,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -91,7 +92,7 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -137,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx playwright install --with-deps chromium
+          npx --no-install playwright install --with-deps chromium
           CHROMIUM_PATH="$(node --input-type=module -e "import { chromium } from 'playwright'; process.stdout.write(chromium.executablePath())")"
           test -x "$CHROMIUM_PATH"
           echo "CT_CHROMIUM_PATH=$CHROMIUM_PATH" >> "$GITHUB_ENV"
@@ -314,3 +315,19 @@ jobs:
           path: .artifacts/import-pilot/*
           if-no-files-found: warn
           retention-days: 7
+
+  merge-gate:
+    name: Merge verification gate
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [canonical, secret-scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require actual success, never skipped verification
+        env:
+          CANONICAL_RESULT: ${{ needs.canonical.result }}
+          SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
+        run: |
+          test "$CANONICAL_RESULT" = success
+          test "$SECRET_SCAN_RESULT" = success
