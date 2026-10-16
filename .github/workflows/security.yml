@@ -26,8 +26,23 @@ jobs:
       - name: Checkout tested merge candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+          fetch-depth: 2
           persist-credentials: false
+      - name: Verify the exact merge candidate parents
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD"
+            test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE"
+          else
+            test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          fi
       - name: Install checksum-pinned workflow scanners
         shell: bash
         run: |
@@ -53,8 +68,23 @@ jobs:
       - name: Checkout tested merge candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+          fetch-depth: 2
           persist-credentials: false
+      - name: Verify the exact merge candidate parents
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD"
+            test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE"
+          else
+            test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          fi
       - name: Install pinned Rust and advisory scanner
         shell: bash
         run: |
@@ -87,8 +117,23 @@ jobs:
       - name: Checkout tested merge candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+          fetch-depth: 2
           persist-credentials: false
+      - name: Verify the exact merge candidate parents
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD"
+            test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE"
+          else
+            test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          fi
       - name: Initialize security analysis
         uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee
         with:
@@ -118,13 +163,27 @@ jobs:
       - name: Checkout tested merge candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+          fetch-depth: 2
           persist-credentials: false
+      - name: Verify the exact merge candidate parents
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD"
+            test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE"
+          else
+            test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          fi
       - name: Test fail-closed alert policy
         run: python3 tools/ci/test_codeql_gate.py
       - name: Block high/critical security alerts and analysis errors
         env:
           GH_TOKEN: ${{ github.token }}
           TESTED_REF: ${{ github.ref }}
-          TESTED_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
         run: python3 tools/ci/check-codeql-alerts.py

@@ -50,6 +50,8 @@ not active before the reviewer/accounting path is implemented and tested.
 ## Unchanged limits
 
 The E2 durable withdrawal/restore gap, historical provenance limits, and production
-qualification remain separate. Existing post-merge evidence reuse must be tightened
-before new scans are eligible for reuse. This rollout does not grant production
+qualification remain separate. Post-merge verification now always runs the full canonical workflow on the actual
+main commit. The old evidence-reuse helper remains historical tooling but is not
+used by the main workflow. PR checkouts verify both candidate parents against the
+event; stale or racing merge refs fail closed instead of testing old code. This rollout does not grant production
 approval or certify the absence of security flaws.

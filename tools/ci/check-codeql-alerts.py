@@ -2,6 +2,7 @@
 """Fail closed unless the tested ref has processed CodeQL evidence and no blockers."""
 import json
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -45,7 +46,7 @@ def main():
     for attempt in range(6):
         try:
             analyses = get("analyses", {"ref": ref, "tool_name": "CodeQL", "per_page": 100})
-            validate_analyses(analyses, os.environ["TESTED_SHA"])
+            validate_analyses(analyses, subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
             break
         except (urllib.error.HTTPError, ValueError):
             if attempt == 5:

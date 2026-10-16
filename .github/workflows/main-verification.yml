@@ -2,117 +2,18 @@ name: Main post-merge verification
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
-  checks: read
 
 concurrency:
   group: main-post-merge-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  evidence:
-    name: Compare merged code with pull request evidence
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    outputs:
-      mode: ${{ steps.decide.outputs.mode }}
-      tested: ${{ steps.decide.outputs.tested }}
-      canonical: ${{ steps.decide.outputs.canonical }}
-      secret: ${{ steps.decide.outputs.secret }}
-      reason: ${{ steps.decide.outputs.reason }}
-    steps:
-      - name: Checkout exact commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Test the reuse decision
-        run: python3 tests/main-merge-evidence.py
-      - name: Decide whether pull request evidence is sufficient
-        id: decide
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 tools/main-merge-evidence.py
-      - name: Record the decision
-        run: |
-          {
-            echo "### Main verification"
-            echo "Merged commit: ${{ github.sha }}"
-            echo "Decision: ${{ steps.decide.outputs.mode }}"
-            echo "Reason: ${{ steps.decide.outputs.reason }}"
-            if [ "${{ steps.decide.outputs.mode }}" = "reuse" ]; then
-              echo "Tested pull request commit: ${{ steps.decide.outputs.tested }}"
-              echo "- [Canonical local verification](${{ steps.decide.outputs.canonical }})"
-              echo "- [Secret scan](${{ steps.decide.outputs.secret }})"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  confirm:
-    name: Confirm product build and blocked gates
-    needs: evidence
-    if: needs.evidence.result == 'success' && needs.evidence.outputs.mode == 'reuse'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout exact commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Install Node 22 for frontend
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: 22.23.3
-      - name: Record separate Node 22 binary
-        shell: bash
-        run: echo "CT_NODE22_BIN=$(dirname "$(command -v node)")" >> "$GITHUB_ENV"
-      - name: Install Node 24 for backend
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: 24.14.1
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts
-      - name: Build the ordinary product frontend
-        shell: bash
-        run: bash tools/web-node22.sh build
-      - name: Build the product backend and tests
-        run: |
-          npm run build
-          npm run build:product
-      - name: Confirm fixture sign-in stays out of the product build
-        shell: bash
-        env:
-          CT_RUNTIME_ENV: local-test
-          CT_ALLOW_LOCAL_FIXTURES: yes
-        run: node --test --test-concurrency=1 dist/tests/fixture-boundaries.test.js dist/tests/product-build-isolation.test.js
-      - name: Confirm release gates remain blocked
-        shell: bash
-        run: |
-          set +e
-          python3 qualification/check-gates.py --enforce
-          q=$?
-          python3 tools/check-release.py --enforce
-          r=$?
-          set -e
-          test "$q" = 1
-          test "$r" = 1
-      - name: Link the reused pull request evidence
-        run: |
-          {
-            echo "Product build rejected fixture sign-in. Qualification and release enforcement still exit 1."
-            echo "Tested pull request commit: ${{ needs.evidence.outputs.tested }}"
-            echo "- [Canonical local verification](${{ needs.evidence.outputs.canonical }})"
-            echo "- [Secret scan](${{ needs.evidence.outputs.secret }})"
-          } >> "$GITHUB_STEP_SUMMARY"
-
   full:
-    name: Run missing verification
-    needs: evidence
-    if: ${{ !cancelled() && (needs.evidence.result != 'success' || needs.evidence.outputs.mode != 'reuse') }}
+    name: Verify actual merged commit
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
