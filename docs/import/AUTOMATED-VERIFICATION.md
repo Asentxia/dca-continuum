@@ -24,7 +24,10 @@ after their actual execution and baseline inspection. Do not label absent scans 
   findings, missing evidence, or failed extraction. Scan completion alone is not
   interpreted as absence of vulnerabilities. A dedicated enterprise-enforced
   configuration (Continuum — advanced CodeQL, ID 284310) is attached only to
-  Asentxia/dca-continuum and enables default setup with advanced setup allowed.
+  Asentxia/dca-continuum and permits switching from default to advanced setup.
+  The repository has been switched to the committed advanced workflow; its
+  default setup state is not-configured. Merely allowing advanced setup while
+  leaving default setup active still caused SARIF processing rejection.
   Secret scanning, push protection, dependency graph, Dependabot alerts and
   security updates remain enabled. Other repositories retain their configuration.
   Custom security-extended analyses upload SARIF with job-scoped security-events
