@@ -83,6 +83,11 @@ function exists(database: string) {
   );
 }
 
+function everydayTasks() {
+  if (!exists('ct_console_dev')) return null;
+  return psql('ct_console_dev', 'SELECT count(*) FROM ct.tasks');
+}
+
 function migrationFiles() {
   const script = readFileSync('tools/apply-console-migrations.sh', 'utf8');
   const listed = script.match(/for m in ([^;]+);do/);
@@ -105,7 +110,7 @@ function bash(
 
 test('a half-built console database is refused and a failed new one is removed', () => {
   ownedCluster();
-  const preserved = psql('ct_console_dev', 'SELECT count(*) FROM ct.tasks');
+  const preserved = everydayTasks();
   dropDisposable(providerDb);
   const failedNew = bash('tools/ensure-console-db.sh', providerDb, {
     CT_CONSOLE_MIGRATION_PROBE_FAIL: 'yes',
@@ -166,10 +171,7 @@ test('a half-built console database is refused and a failed new one is removed',
     String(migrationFiles().length),
   );
   assert.equal(bash('tools/ensure-console-db.sh', providerDb).status, 0);
-  assert.equal(
-    psql('ct_console_dev', 'SELECT count(*) FROM ct.tasks'),
-    preserved,
-  );
+  assert.equal(everydayTasks(), preserved);
 });
 
 async function listenPort() {
@@ -216,7 +218,7 @@ async function stopApi(child: ChildProcess) {
 
 test('a half-built fixture example is not skipped on restart', async () => {
   ownedCluster();
-  const preserved = psql('ct_console_dev', 'SELECT count(*) FROM ct.tasks');
+  const preserved = everydayTasks();
   dropDisposable(browserDb);
   assert.equal(bash('tools/ensure-console-db.sh', browserDb).status, 0);
   const port = await listenPort();
@@ -267,8 +269,5 @@ test('a half-built fixture example is not skipped on restart', async () => {
   } finally {
     await stopApi(running.child);
   }
-  assert.equal(
-    psql('ct_console_dev', 'SELECT count(*) FROM ct.tasks'),
-    preserved,
-  );
+  assert.equal(everydayTasks(), preserved);
 });
