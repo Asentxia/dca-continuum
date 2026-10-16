@@ -3,7 +3,7 @@ import { assertLocalFixtures } from '../../src/runtime-profile.js';
 import { ContextService } from '../../src/context-service.js';
 import { fixture } from '../../tests/implementation-helpers.js';
 import { admin, gov, fence } from '../../tests/helpers.js';
-import { pool } from '../../src/db.js';
+import { pool, tx } from '../../src/db.js';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { ConsoleReads } from '../../src/console/reads.js';
@@ -160,18 +160,19 @@ const incidentExists = !(await missing(
   "SELECT 1 FROM ct.incidents WHERE tenant='a' AND id=$1",
   ['unknown-ledger'],
 ));
-if (!incidentExists) {
-  await gov.query(
-    "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
-    [f.principal],
-  );
-  await gov.query(
-    "INSERT INTO ct.incident_tasks VALUES('a','unknown-ledger','t-ledger-uncertain')",
-  );
-  await gov.query(
-    "INSERT INTO ct.notifications(tenant,id,incident,source_version,channel,delivery_state) VALUES('a','ledger-notice','unknown-ledger',1,'in-app','IN_APP')",
-  );
-}
+if (!incidentExists)
+  await tx(gov, async (client) => {
+    await client.query(
+      "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
+      [f.principal],
+    );
+    await client.query(
+      "INSERT INTO ct.incident_tasks VALUES('a','unknown-ledger','t-ledger-uncertain')",
+    );
+    await client.query(
+      "INSERT INTO ct.notifications(tenant,id,incident,source_version,channel,delivery_state) VALUES('a','ledger-notice','unknown-ledger',1,'in-app','IN_APP')",
+    );
+  });
 const contextPool = pool('ct_context_service');
 if (
   await missing("SELECT 1 FROM ct.context_heads WHERE tenant='a' AND id=$1", [
