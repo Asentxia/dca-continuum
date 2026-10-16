@@ -236,6 +236,31 @@ test('a half-built fixture example is not skipped on restart', async () => {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     await stopApi(running.child);
+    psql(
+      browserDb,
+      "UPDATE ct.operations SET state='COMMITTED', version=version+1 WHERE tenant='a' AND id='ledger-uncertain' AND state='UNKNOWN'",
+    );
+    psql(
+      browserDb,
+      "INSERT INTO ct.assignments(identity_id,tenant,operation,digest,expires) SELECT 'focus-worker-a','a','draft-summary',digest,now()+interval '1 hour' FROM ct.operations WHERE tenant='a' AND id='draft-summary'",
+    );
+    psql(
+      browserDb,
+      "DELETE FROM ct.notifications WHERE tenant='a' AND id='ledger-notice'",
+    );
+    running = startApi(port);
+    for (let attempt = 0; attempt < 80; attempt++) {
+      if (running.child.exitCode !== null) throw Error(running.output());
+      try {
+        const response = await fetch('http://127.0.0.1:' + port + '/read');
+        if (response.status < 500) break;
+      } catch {
+        /* still starting */
+      }
+      if (attempt === 79) throw Error(running.output());
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    await stopApi(running.child);
     const tasksBefore = psql(
       browserDb,
       "SELECT count(*) FROM ct.tasks WHERE tenant='a'",

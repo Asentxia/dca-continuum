@@ -88,27 +88,17 @@ for (const example of [
     "SELECT 1 FROM ct.work_coordination WHERE tenant='a' AND task=$1 AND project='operations'",
     [taskId],
   ));
-  const stateReady =
+  const settled =
     example.state === 'pending' || example.state === 'planned'
       ? true
       : !(await missing(
-          "SELECT 1 FROM ct.operations WHERE tenant='a' AND id=$1 AND state=$2",
+          "SELECT 1 FROM ct.operations WHERE tenant='a' AND id=$1 AND state = ANY($2::text[])",
           [
             example.id,
-            example.state === 'unknown'
-              ? 'UNKNOWN'
-              : example.state === 'verified'
-                ? 'COMMITTED'
-                : 'DENIED',
+            ['COMMITTED', 'UNKNOWN', 'DENIED', 'FAILED_KNOWN_NO_EFFECT'],
           ],
         ));
-  const assignmentsCleared =
-    example.id !== 'draft-summary' ||
-    (await missing(
-      "SELECT 1 FROM ct.assignments WHERE tenant='a' AND operation=$1",
-      [example.id],
-    ));
-  if (taskExists && linked && stateReady && assignmentsCleared) continue;
+  if (taskExists && linked && settled) continue;
   if (taskExists)
     throw Error(
       `Local fixture example ${example.id} is incomplete. Export CT_RESET_CONSOLE_FIXTURE=yes and run npm run dev:console:reset`,
@@ -170,14 +160,6 @@ const incidentExists = !(await missing(
   "SELECT 1 FROM ct.incidents WHERE tenant='a' AND id=$1",
   ['unknown-ledger'],
 ));
-const incidentNoticeExists = !(await missing(
-  "SELECT 1 FROM ct.notifications WHERE tenant='a' AND id=$1",
-  ['ledger-notice'],
-));
-if (incidentExists && !incidentNoticeExists)
-  throw Error(
-    'Local fixture example unknown-ledger is incomplete. Export CT_RESET_CONSOLE_FIXTURE=yes and run npm run dev:console:reset',
-  );
 if (!incidentExists) {
   await gov.query(
     "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
