@@ -1,0 +1,37 @@
+{
+  "name": "@asentxia/continuum-console",
+  "private": true,
+  "version": "0.4.0",
+  "engines": {
+    "node": ">=22.12 <23"
+  },
+  "scripts": {
+    "dev": "next dev --webpack --hostname 127.0.0.1",
+    "build": "CT_LOCAL_TEST_BUILD=no next build --webpack",
+    "start": "CT_LOCAL_TEST_BUILD=no next start --hostname 127.0.0.1",
+    "typecheck": "CT_LOCAL_TEST_BUILD=no next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "build:local-test": "CT_LOCAL_TEST_BUILD=yes next build --webpack",
+    "start:local-test": "CT_LOCAL_TEST_BUILD=yes next start --hostname 127.0.0.1",
+    "dev:local-test": "CT_LOCAL_TEST_BUILD=yes next dev --webpack --hostname 127.0.0.1"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@workos-inc/authkit-nextjs": "4.4.0",
+    "@workos-inc/node": "10.7.0",
+    "geist": "1.5.1",
+    "next": "16.4.0",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "jsdom": "29.1.1",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

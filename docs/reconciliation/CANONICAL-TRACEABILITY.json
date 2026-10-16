@@ -1,0 +1,899 @@
+{
+  "profile": "Canonical local product; non-live qualified scope only",
+  "contracts": [
+    {
+      "contract": "T-01",
+      "title": "Account sign-in/out; workspace selection",
+      "sourceAcceptance": {
+        "Acceptance test A-01": "Two tenants and two browser tabs cannot leak old private data; expired session cannot approve"
+      },
+      "classification": "CONFIGURATION REQUIRED",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "AuthKit server bridge and signed local/test sessions; live sign-in/MFA/workspace enrollment not exercised.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-02",
+      "title": "Readiness prerequisite detail",
+      "sourceAcceptance": {
+        "Acceptance test A-02": "Missing identity, Computer or verifier shows exact dependent blocked steps and no ready badge"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Dependency-aware readiness and exact qualification limitations.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-03",
+      "title": "Work Focus select/filter/search/expand",
+      "sourceAcceptance": {
+        "Acceptance test A-03": "Two causes affecting one task count one distinct task; unrelated same-provider incidents remain separate"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Backend causal grouping, deterministic order, scoped search and incomplete-snapshot disclosure.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-04",
+      "title": "Focus refresh order/new critical notice",
+      "sourceAcceptance": {
+        "Acceptance test A-04": "Late critical row never changes selected approval or keyboard focus; explicit refresh orders severity/impact/deadline/age/ID"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Frozen selection/order and accessible new-attention announcement; explicit reorder.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-05",
+      "title": "Task list/detail/activity/output links",
+      "sourceAcceptance": {
+        "Acceptance test A-05": "REQUESTED operation with approval and HTTP 200 never labels task completed"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Durable work/task detail and operation links; effects never prove a business goal. Full artifact-download UI is deferred.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-06",
+      "title": "New task form",
+      "sourceAcceptance": {
+        "Acceptance test A-06": "Duplicate key/body returns same task; changed body conflicts; record accepted is not execution success"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Fixture task creation, atomic command idempotency and one lookup after lost response; never starts a workflow/effect.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-07",
+      "title": "Projects list/detail/resources",
+      "sourceAcceptance": {
+        "Acceptance test A-07": "Filtered list and project list identify same tasks; archive/drag controls absent without commands"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Tenant-scoped projects reference the same durable task IDs. Project create/edit/archive UI deliberately absent.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/coordination.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-08",
+      "title": "Coordination/dependency inspector",
+      "sourceAcceptance": {
+        "Acceptance test A-08": "Display responsible owner, waiting-on and resource conflict without sharing cross-tenant identifiers"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Responsible VERA and dependency edges; internal cycle/CAS tests pass. Resource-conflict orchestration and dependency mutation UI are not implemented.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/coordination.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-09",
+      "title": "Handoff management",
+      "sourceAcceptance": {
+        "Acceptance test A-09": "Two competing handoffs cannot create two owners; old approval does not authorize new principal"
+      },
+      "classification": "DEFERRED / UNAVAILABLE",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Bounded internal handoff offer/accept CAS is tested; no primary handoff command/control. Old operation/grant authority is not transferred.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/coordination.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-10",
+      "title": "VERA overview/continuity/history",
+      "sourceAcceptance": {
+        "Acceptance test A-10": "Model replacement leaves principal ID unchanged; human/model/machine/Computer IDs rendered separately"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Durable VERA distinct from human, machine, model and Computer; versioned cognition metadata does not change principal identity.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-11",
+      "title": "Workload identity enrollment detail",
+      "sourceAcceptance": {
+        "Acceptance test A-11": "Test issuer and fixture HMAC never advertised as production; JWT/key/cookie values absent from DOM/network/export"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Independent enrolled identity metadata and no browser credentials. Real issuer/workload enrollment remains P1 PARTIAL.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-12",
+      "title": "Identity assignment form/detail",
+      "sourceAcceptance": {
+        "Acceptance test A-12": "Human identity cannot be assigned as worker; wrong principal/digest denied and recorded assignment matches operation"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Exact same-principal machine assignment through durable human ledger; assignment is not approval or issuance.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-13",
+      "title": "Renewal freshness status",
+      "sourceAcceptance": {
+        "Acceptance test A-13": "Earlier identity/grant/assignment expiry shortens lifetime; disabled version rejects issued token before final send"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "<=90-second capability contract and fresh fixture renewal tested; unobserved issuance remains unknown. Real renewable workload/24-hour tests NOT RUN.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-14",
+      "title": "Cognition/model binding detail",
+      "sourceAcceptance": {
+        "Acceptance test A-14": "Replacement never resets operation ID or claims new authority/equivalent memory behavior"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Versioned model-binding registry and stable VERA tested. Live model replacement/configuration command and semantic compatibility are unavailable.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-15",
+      "title": "Context/state provenance detail",
+      "sourceAcceptance": {
+        "Acceptance test A-15": "Stale expected version/corrupt digest/cross-tenant recall rejected; summary text cannot authorize an operation"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Structured context/provenance/version/quarantine and artifact services tested. Full semantic/vector memory and primary context mutations unavailable.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/context-service.ts",
+        "src/artifact-store.ts",
+        "src/recovery.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-16",
+      "title": "Approval queue/exact preview/technical disclosure",
+      "sourceAcceptance": {
+        "Acceptance test A-16": "Long Unicode/multiline params remain reviewable; injected markup inert; displayed preview digest matches approved binding"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Complete immutable preview, long Unicode parameters, inert markup and technical binding disclosure.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-17",
+      "title": "Approve exact action",
+      "sourceAcceptance": {
+        "Acceptance test A-17": "MFA/auth_time boundary, changed digest/grant/fence and two tabs deny stale approval; approved label never means executed"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Fresh owner/MFA, exact digest/version, append-only history and atomic receipt; independent fixture worker later dispatches/verifies.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-18",
+      "title": "Approval invalidation/expiry status",
+      "sourceAcceptance": {
+        "Acceptance test A-18": "Clock skew cannot extend expiry; revoke/epoch/version change blocks action while retaining decision history"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Expired/stale decisions retained; monotonic elapsed freshness, server CAS and no automatic reapproval.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-19",
+      "title": "Grant detail/policy/limits/reservations",
+      "sourceAcceptance": {
+        "Acceptance test A-19": "Reservation differs from spend; absent policy version displays unknown, never invented epoch"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Exact scoped grants/reservations; missing policy version and measured spend labelled unknown.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-20",
+      "title": "Create bounded grant",
+      "sourceAcceptance": {
+        "Acceptance test A-20": "Expiry >48h, negative/unsafe integer cost, budget<maxCost and unsupported selector cannot enable action"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Bounded grant form and strict exact-selector/server cost/expiry constraints; no assignment/approval/effect implied.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-21",
+      "title": "Revoke grant",
+      "sourceAcceptance": {
+        "Acceptance test A-21": "Concurrent revoke/send preserves documented ordering; revocation badge only after persisted result, no all-effects-stopped claim"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "CAS revocation, durable lookup and honest in-flight semantics; local races/final-send checks retained.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-22",
+      "title": "Operation lifecycle detail",
+      "sourceAcceptance": {
+        "Acceptance test A-22": "UNKNOWN cannot acquire resend control; HTTP 2xx/model/log/hash receipt cannot turn it COMMITTED"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Seven wire states, strict runtime validation and supported matching provider observation; no UNKNOWN retry.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/semantics.ts",
+        "src/controller.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-23",
+      "title": "Pinned GitHub read observation",
+      "sourceAcceptance": {
+        "Acceptance test A-23": "Tiny timeout followed by successful read-back says verified intended read, never first request executed or write succeeded"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Six fresh fixed, unauthenticated GitHub public-read cases. Verified intended read does not prove original request arrival or a protected mutation.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/semantics.ts",
+        "src/controller.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log",
+        ".artifacts/canonical/final/backend/REAL-PUBLIC-READ.tap",
+        ".artifacts/canonical/final/backend/REAL-PUBLIC-READ-RESPONSES.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-24",
+      "title": "Evidence filters/pagination/detail",
+      "sourceAcceptance": {
+        "Acceptance test A-24": "Valid chain with missing/mismatched provider observation has no verified-success badge"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Authorized cursor/search/event detail and operation links; chain != external truth. Complete six-level navigable evidence graph remains partial.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/semantics.ts",
+        "src/controller.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-25",
+      "title": "Evidence export",
+      "sourceAcceptance": {
+        "Acceptance test A-25": "Cross-tenant/private fields excluded; partial archive includes completeness marker and original observation provenance"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Audited/redacted selected-page export <=60 events with completeness/source/integrity limitations; not a full archive.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-26",
+      "title": "Computer list/detail/raw lifecycle",
+      "sourceAcceptance": {
+        "Acceptance test A-26": "Each raw state has distinct accessible text; generation unknown cannot become workspaceRevision; future enum disables actions"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "All 15 provider raw states distinct; domain lifecycle, placement generation and freshness separate; future raw state not synthesized as stopped.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-27",
+      "title": "Computer pause/resume/restart/wake",
+      "sourceAcceptance": {
+        "Acceptance test A-27": "Lifecycle 202 never says recovered; changed generation/state rejects stale action; recovery failure cannot display stopped"
+      },
+      "classification": "DEFERRED / UNAVAILABLE",
+      "localAcceptance": "NOT RUN",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Primary lifecycle controls absent pending managed environment/qualification; existing local lifecycle services remain implemented/tested separately.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-28",
+      "title": "Checkpoint/recovery/fence inspector",
+      "sourceAcceptance": {
+        "Acceptance test A-28": "Ready checkpoint with failed restore stays restore_failed; old-generation requests denied before new admission"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Artifact manifests/checkpoint/fence metadata and local reconstruction/DR tested. Managed host loss/physical fence remains NOT RUN.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/context-service.ts",
+        "src/artifact-store.ts",
+        "src/recovery.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-29",
+      "title": "Manual session view/frame/viewport",
+      "sourceAcceptance": {
+        "Acceptance test A-29": "Viewing cannot act; expired/revoked/missing lease fails closed across instances; screenshot not persisted by default"
+      },
+      "classification": "DEFERRED / UNAVAILABLE",
+      "localAcceptance": "NOT RUN",
+      "liveAcceptance": "NOT RUN",
+      "scope": "No managed screen/frame/viewport service exposed; no screenshot/input credential path in the production console.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/manual-control.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-30",
+      "title": "Manual take control/hand back/input",
+      "sourceAcceptance": {
+        "Acceptance test A-30": "Two tabs cannot own control; missing session row denies; privileged browser unreachable by agent; Tab/Escape usable locally"
+      },
+      "classification": "DEFERRED / UNAVAILABLE",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Fixture-only durable exclusive lease/fencing/hand-back foundation tested; actual managed input, privilege isolation and control UI unavailable.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/manual-control.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-31",
+      "title": "Recovery UNKNOWN detail/observation status",
+      "sourceAcceptance": {
+        "Acceptance test A-31": "Revoked grant plus lost verifier remains owned UNKNOWN, without retry/resume/regrant control"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Owned original UNKNOWN, observation and unavailable reason remain visible after revocation; no browser reconcile/regrant/resend.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/semantics.ts",
+        "src/controller.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-32",
+      "title": "Incident acknowledgement/ownership",
+      "sourceAcceptance": {
+        "Acceptance test A-32": "Acknowledged incident with UNKNOWN operation stays unresolved and still linked from Work"
+      },
+      "classification": "IMPLEMENTED + LIVE QUALIFICATION PENDING",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Versioned durable acknowledgement; never incident resolution or effect success.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-33",
+      "title": "Integrations detail/setup status",
+      "sourceAcceptance": {
+        "Acceptance test A-33": "Public read PASS never enables protected write; unauthorized configuration hidden; setup metadata contains no credential values"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Exact adapter/resource and readiness metadata. Live connection/OAuth/credential health integration requires approved configuration.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-34",
+      "title": "Notifications inbox/delivery detail/preferences",
+      "sourceAcceptance": {
+        "Acceptance test A-34": "Duplicate events produce one incident group; delivered/read notification does not resolve cause; channel failure visible"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Durable deduplicated in-app records and mark-read separate from incident resolution. External delivery and preferences unavailable.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/console/commands.ts",
+        "migrations/011-console-domain.sql",
+        "web/components/ReviewPanel.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-35",
+      "title": "Usage/budget/limit detail",
+      "sourceAcceptance": {
+        "Acceptance test A-35": "Stale usage never shows zero spend/free capacity; concurrency rejection has reason, no invisible retry storm"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Enforced reservation counters/test units, unknown money/estimate and external meter freshness; no fabricated telemetry.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/baseline/SUMMARY.json"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-36",
+      "title": "Billing portal/account terms",
+      "sourceAcceptance": {
+        "Acceptance test A-36": "Duplicate portal purchase cannot create second subscription; invoice source and entitlement do not imply grant"
+      },
+      "classification": "CONFIGURATION REQUIRED",
+      "localAcceptance": "NOT RUN",
+      "liveAcceptance": "NOT RUN",
+      "scope": "No billing provider/portal or purchase commands copied. Billing terms/catalogue require separate approved integration; no pricing changes.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-37",
+      "title": "Deployment/data/support/maturity",
+      "sourceAcceptance": {
+        "Acceptance test A-37": "No HA/DR/security-certification badge or scheduler selector from design/default recommendation"
+      },
+      "classification": "READ-ONLY",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Exact deployment/gate/maturity limitations; no scheduler/HA/security-certification toggle.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-38",
+      "title": "Shared navigation/back/disclosure/copy/pagination",
+      "sourceAcceptance": {
+        "Acceptance test A-38": "Back restores selection/filter/scroll; keyboard and mobile navigation reach same exact detail without hidden fields"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Shared URL selection/search, mobile list/detail, safe-ID copy and scoped pagination. Full back/scroll restoration across all routes not independently audited.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-39",
+      "title": "Shared stale/offline/error/unknown-schema states",
+      "sourceAcceptance": {
+        "Acceptance test A-39": "Out-of-order response, disconnect after click and unknown enum yield no false success or unauthorized control"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PASS",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Late/out-of-order reads, offline/reconnect, schema/receipt failures and identity switch fail closed; commands never automatically replay.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx",
+        "src/identity-provider.ts",
+        "src/authority-service.ts",
+        "web/lib/server/session.ts"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    },
+    {
+      "contract": "T-40",
+      "title": "Shared mobile/zoom/keyboard/reduced-motion states",
+      "sourceAcceptance": {
+        "Acceptance test A-40": "320 CSS px/400% zoom/200% text, keyboard, screen reader and reduced motion preserve preview and action safety"
+      },
+      "classification": "IMPLEMENTED + TESTED",
+      "localAcceptance": "PARTIAL",
+      "liveAcceptance": "NOT RUN",
+      "scope": "Axe/keyboard/focus/reflow/text enlargement/reduced-motion evidence. Native screen-reader and browser-chrome zoom review NOT RUN; no WCAG certification claim.",
+      "code": [
+        "src/console/reads.ts",
+        "web/components/ConsoleApp.tsx"
+      ],
+      "evidence": [
+        ".artifacts/canonical/final/backend/CONSOLE-DOMAIN.tap",
+        ".artifacts/canonical/final/frontend/BROWSER.tap",
+        ".artifacts/canonical/final/backend/CONSOLE-SEMANTICS.tap",
+        ".artifacts/canonical/final/frontend/UNIT-COMPONENT.log",
+        ".artifacts/canonical/final/browser/AXE-WORK.json",
+        ".artifacts/canonical/final/browser/AXE-APPROVAL.json",
+        ".artifacts/canonical/final/browser/ZOOM-METHOD.json",
+        ".artifacts/canonical/final/browser/ARIA-REVIEW.yaml"
+      ],
+      "unavailableProfileRule": "Absence/disabled control is not a PASS for the complete live feature."
+    }
+  ],
+  "count": 40,
+  "production": "BLOCKED",
+  "scheduler": "HELD",
+  "independentReview": "NOT RUN"
+}

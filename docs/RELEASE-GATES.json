@@ -1,0 +1,91 @@
+{
+  "productionReady": false,
+  "canonPromotionAllowed": false,
+  "schedulerDecision": "HELD \u2014 both pass bounded workload; required long-wait/production burden tests incomplete",
+  "gates": [
+    {
+      "id": "G1",
+      "name": "No bypass",
+      "status": "PARTIAL",
+      "localEvidence": "UID/network namespace prevents provider/DB TCP, DB Unix socket, credential-file reads, forged capability and injected request fields",
+      "blockedBy": "Live VM egress/IAM, DNS/redirect/SSRF, real privileged browser/CDP and cross-placement isolation"
+    },
+    {
+      "id": "G2",
+      "name": "Fault and races",
+      "status": "PARTIAL",
+      "localEvidence": "Controller SIGKILL at three boundaries; twenty duplicate calls; expiry-lock regression; revoke-before-send; whole scheduler worker kill after effect",
+      "blockedBy": "Every production adapter boundary, host destruction, partitions, large-scale concurrent race battery"
+    },
+    {
+      "id": "G3",
+      "name": "Authority correctness",
+      "status": "PARTIAL",
+      "localEvidence": "Exact approval/digest/version, tenant, scope, expiry, epoch, generation, recovery fence, budget denial; monotonic grants/principals",
+      "blockedBy": "Real OIDC/machine identity, human approval UI, capability renewal over long waits; delegation deliberately unsupported"
+    },
+    {
+      "id": "G4",
+      "name": "Memory isolation",
+      "status": "PARTIAL",
+      "localEvidence": "Tenant reader cannot see other tenant; stale/corrupt digest rejected; memory never grants authority",
+      "blockedBy": "Full ingestion/retrieval/embedding pipeline, poisoning, retention/deletion and production quarantine"
+    },
+    {
+      "id": "G5",
+      "name": "Evidence truth",
+      "status": "PARTIAL",
+      "localEvidence": "Transactional contiguous chain under concurrent writers; rollback/append-only; matching readback only; privileged tamper detected",
+      "blockedBy": "Real provider verification contracts, immutable external anchors, redaction/retention and independent review"
+    },
+    {
+      "id": "G6",
+      "name": "Computer destruction and recovery",
+      "status": "PARTIAL",
+      "localEvidence": "Killed isolated local agent and destroyed scratch directory; validated checkpoint; new generation works and old is denied",
+      "blockedBy": "Destroy actual runtime VM/host, restore object-store manifest and demonstrate old-host provider/IAM fence"
+    },
+    {
+      "id": "G7",
+      "name": "Database restore and disaster recovery",
+      "status": "PARTIAL",
+      "localEvidence": "PostgreSQL immediate crash/restart retains evidence; logical schema restore omits activation fence and denies dispatch",
+      "blockedBy": "Continuous WAL/PITR, primary promotion, HA, backup-window real-effect reconciliation, old-region isolation and agreed RPO/RTO"
+    },
+    {
+      "id": "G8",
+      "name": "Compromised agent and worker containment",
+      "status": "PARTIAL",
+      "localEvidence": "Separate UID/network namespace, no provider key or SQL path; only allowlisted operation capability works",
+      "blockedBy": "Production task/tenant-specific identity and capability custody; shared fixture scheduler role must not be assigned to an ordinary untrusted worker; managed VM policy and cross-placement/tenant containment"
+    },
+    {
+      "id": "G9",
+      "name": "Resource and spend controls",
+      "status": "PARTIAL",
+      "localEvidence": "Transactional per-operation cost and shared-grant budget reservation serialize; over-budget denied",
+      "blockedBy": "Actual money/tokens/provider billing, quota reconciliation, retry storms, sandbox/concurrency/storage limits"
+    },
+    {
+      "id": "G10",
+      "name": "Decisive scheduler qualification",
+      "status": "PARTIAL",
+      "localEvidence": "Five workloads pass per engine on same domain/controller; durable short wait, branching, old-version retained replay, partial revocation, worker and database crashes",
+      "blockedBy": "Real 24-hour soak with valid renewed identity/authority, native deployment-version policy, host/service failure, representative scale, implementation/runbook cost and production economics"
+    },
+    {
+      "id": "G11",
+      "name": "Independent security review",
+      "status": "NOT_RUN",
+      "localEvidence": "No certification claimed",
+      "blockedBy": "Independent review of trusted controller, credentials, network and provider-specific contracts"
+    },
+    {
+      "id": "G12",
+      "name": "Migration canary",
+      "status": "NOT_RUN",
+      "localEvidence": "Reviewed fail-closed patch set and exact migration map, no deployed writes",
+      "blockedBy": "Actual deployed revisions, repository owner choice, read-only mapping, credential rotation and single-authority canary"
+    }
+  ]
+}

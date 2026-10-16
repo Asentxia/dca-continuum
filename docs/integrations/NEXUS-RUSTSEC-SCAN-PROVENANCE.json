@@ -1,0 +1,58 @@
+{
+  "startedAt": "2026-10-15T22:04:28.421460+00:00",
+  "completedAt": "2026-10-15T22:04:28.529334+00:00",
+  "toolVersion": "cargo-audit 0.22.2",
+  "toolSha256": "6875fad0cc4efc6acddee79ce4c4fa5939a7d4fc950bc4d0cf443853bb0ac7c8",
+  "command": [
+    "cargo-audit",
+    "audit",
+    "--no-fetch",
+    "--db",
+    "$NEXUS_ADVISORY_DB",
+    "--file",
+    "tools/nexus-native/Cargo.lock",
+    "--json",
+    "-D",
+    "warnings"
+  ],
+  "environment": {
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "exitCode": 0,
+  "lockSha256": "8ad86f31b8db997f4a49da6db507de580ab973dbb0da86d0e992519621b6bd54",
+  "before": {
+    "commit": "edb58f5974b83eb8302332821cb6d389777aa351",
+    "gitTree": "9cadd9fc13d75527fa5fd3f14376ed3a1a5e3b63",
+    "trackedFileContentSha256": "b2a47b486a9bf91195322a5bd272db58f6658d3d7df5be146c1847a76d5dd49a",
+    "trackedFiles": 1348,
+    "dirtyStatus": ""
+  },
+  "after": {
+    "commit": "edb58f5974b83eb8302332821cb6d389777aa351",
+    "gitTree": "9cadd9fc13d75527fa5fd3f14376ed3a1a5e3b63",
+    "trackedFileContentSha256": "b2a47b486a9bf91195322a5bd272db58f6658d3d7df5be146c1847a76d5dd49a",
+    "trackedFiles": 1348,
+    "dirtyStatus": ""
+  },
+  "rawReportSha256": "556fa98c94188a27e7661c03a32bb215c6ed852ca16cf93953ed8d98475f2131",
+  "reproductionCommand": [
+    "python3",
+    "tools/nexus-audit.py",
+    "$NEXUS_AUDIT_BIN",
+    "$NEXUS_ADVISORY_DB",
+    ".artifacts/nexus/security-audit"
+  ],
+  "expandedCommandRetainedInPrivateEvidence": true,
+  "reportedMetadataNote": "Raw no-fetch report has null last-commit/last-updated; exact clean DB git+working file hashes are bound independently before and after scan.",
+  "registryPackages": 104,
+  "localBridgePackages": 1,
+  "totalLockfilePackages": 105,
+  "supportEvidence": {
+    "policyUrl": "https://github.com/bytecodealliance/wasmtime/blob/main/docs/stability-release.md",
+    "policySha256": "a7d1c958219a1d5b427141152610f26435cae33ab533f4dae639aa014e0002fd",
+    "policy": "LTS majors divisible by12,24months security support",
+    "version36InitialRelease": "2025-08-20T15:31:53.991496Z",
+    "supportedThrough": "2027-08-20",
+    "registryMetadataUrl": "https://crates.io/api/v1/crates/wasmtime/36.0.0"
+  }
+}

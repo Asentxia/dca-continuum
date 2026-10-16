@@ -1,0 +1,6 @@
+{
+  "node24Bin": "/absolute/linux/path/to/node24/bin",
+  "node22Bin": "/absolute/linux/path/to/node22/bin",
+  "pgBin": "/absolute/linux/path/to/pg17/bin",
+  "chromium": "/absolute/linux/path/to/chromium/chrome"
+}

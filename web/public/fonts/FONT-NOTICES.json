@@ -1,0 +1,20 @@
+{
+  "fonts": [
+    {
+      "file": "geist.woff2",
+      "family": "Geist",
+      "upstream": "geist@1.5.1",
+      "license": "OFL-1.1",
+      "notice": "Geist-OFL.txt",
+      "copyright": "Copyright (c) 2023 Vercel, in collaboration with basement.studio"
+    },
+    {
+      "file": "jetbrains-mono.woff2",
+      "family": "JetBrains Mono",
+      "upstream": "@fontsource/jetbrains-mono@5.3.0",
+      "license": "OFL-1.1",
+      "notice": "JetBrainsMono-OFL.txt",
+      "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+ "enabled":false,"approvalReference":null,"region":null,"artifactBucket":null,"evidenceAnchorBucket":null,"independentFenceBucket":null,"kmsKeyRef":null,"credentialConnectionRef":null,
+ "separation":"independent fence/journal/anchor administration must not share the database restore failure boundary",
+ "policy":"private buckets, TLS, KMS, per-service/per-tenant prefixes, retention/lifecycle/erasure policy, no agent-wide object-store credentials",
+ "stagingStatus":"NOT RUN"
+}

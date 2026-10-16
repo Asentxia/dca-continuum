@@ -1,0 +1,216 @@
+name: PR CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install pinned Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/audit /tmp/gitleaks
+          curl --fail --silent --show-error --location \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output /tmp/gitleaks/gitleaks.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks/gitleaks.tar.gz' | sha256sum --check -
+          tar -xzf /tmp/gitleaks/gitleaks.tar.gz -C /tmp/gitleaks gitleaks
+          /tmp/gitleaks/gitleaks version
+
+      - name: Scan current source
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gitleaks/gitleaks dir \
+            --redact \
+            --no-banner \
+            --gitleaks-ignore-path .gitleaksignore \
+            --report-format json \
+            --report-path .artifacts/audit/gitleaks-source.json \
+            .
+
+      - name: Scan reachable Git history
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/gitleaks/gitleaks git \
+            --redact \
+            --no-banner \
+            --gitleaks-ignore-path .gitleaksignore \
+            --report-format json \
+            --report-path .artifacts/audit/gitleaks-history.json \
+            .
+
+      - name: Upload redacted scan reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: secret-scan-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .artifacts/audit/gitleaks-*.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: true
+
+  canonical:
+    name: Canonical local verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    env:
+      CI: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      CT_PG_BIN: /usr/lib/postgresql/17/bin
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Node 22 for frontend
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+
+      - name: Record separate Node 22 binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CT_NODE22_BIN=$(dirname "$(command -v node)")" >> "$GITHUB_ENV"
+          node --version
+
+      - name: Install Node 24 for backend
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.14.1
+
+      - name: Install PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n true
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17 postgresql-client-17 python3 openssl
+          "$CT_PG_BIN/postgres" --version
+          "$CT_PG_BIN/initdb" --version
+
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p 'process.versions.node.split(".")[0]')" = 24
+          test "$("$CT_NODE22_BIN/node" -p 'process.versions.node.split(".")[0]')" = 22
+          npm ci --ignore-scripts
+
+      - name: Install Chromium and system browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          CHROMIUM_PATH="$(node --input-type=module -e "import { chromium } from 'playwright'; process.stdout.write(chromium.executablePath())")"
+          test -x "$CHROMIUM_PATH"
+          echo "CT_CHROMIUM_PATH=$CHROMIUM_PATH" >> "$GITHUB_ENV"
+
+      - name: Prepare pinned native integration toolchain and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v rustup
+          rustup toolchain install 1.94.0 --profile minimal
+          NATIVE_BIN="$(dirname "$(rustup which --toolchain 1.94.0 rustc)")"
+          "$NATIVE_BIN/rustc" --version
+          export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
+          "$NATIVE_BIN/cargo" fetch --locked --manifest-path tools/nexus-native/Cargo.toml
+          echo "NEXUS_TOOLCHAIN_BIN=$NATIVE_BIN" >> "$GITHUB_ENV"
+          echo "CARGO_HOME=$CARGO_HOME" >> "$GITHUB_ENV"
+
+      - name: Local launcher safety tests (no database mutation)
+        run: python3 -m unittest discover -s tools -p test_local_test.py
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Dependency audits
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/audit
+          npm audit --omit=dev --json > .artifacts/audit/npm-audit-production.json
+          npm audit --json > .artifacts/audit/npm-audit-complete.json
+
+      - name: Install the root-owned fixture privilege helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo CT_FIXTURE_NODE="$(command -v node)" bash tools/install-fixture-priv.sh
+
+      - name: Let the unprivileged fixture uid read the workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod o+x "$HOME" "$HOME/work" "$(dirname "$GITHUB_WORKSPACE")" "$GITHUB_WORKSPACE"
+          chmod -R a+rX "$GITHUB_WORKSPACE"
+
+      - name: Run guarded canonical verification
+        shell: bash
+        env:
+          CT_RESET_LOCAL_FIXTURE: "yes"
+          CT_RESET_CONSOLE_FIXTURE: "yes"
+        run: |
+          set -euo pipefail
+          npm run test:canonical
+
+      - name: Confirm production gates remain blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npm run qualification-check > .artifacts/audit/qualification-check.log 2>&1
+          q=$?
+          npm run release-check > .artifacts/audit/release-check.log 2>&1
+          r=$?
+          set -e
+          test "$q" -eq 1
+          test "$r" -eq 1
+          echo "Qualification and release enforcement remain intentionally blocked."
+
+      - name: Upload bounded verification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: canonical-verification-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            .artifacts/canonical/final/**
+            .artifacts/implementation/final/**
+            .artifacts/audit/**
+          if-no-files-found: warn
+          retention-days: 7
+          include-hidden-files: true

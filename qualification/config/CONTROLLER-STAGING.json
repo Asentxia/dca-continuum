@@ -1,0 +1,7 @@
+{
+ "enabled":false,"approvalReference":null,"controllerOrigin":null,"tlsSecretConnectionRef":null,"capabilityIssuer":null,"publicJwksRef":null,"independentFenceRef":null,"providerCredentialRef":null,
+ "transport":"HTTPS operation-reference only; no generic proxy, redirect or worker-selected URL",
+ "verification":"public asymmetric keys only; issuer private key not at worker/controller verifier",
+ "identity":"fresh assigned one-operation capability; online enrollment/version/epoch/generation/fence/approval recheck",
+ "liveStatus":"NOT RUN"
+}

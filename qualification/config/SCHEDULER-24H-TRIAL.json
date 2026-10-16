@@ -1,0 +1,16 @@
+{
+  "enabled": false,
+  "mode": "approved-staging-real-time",
+  "waitMs": 86400000,
+  "clockAccelerationAllowed": false,
+  "sameDomainAndController": true,
+  "historyContains": ["job id", "schema version", "stable operation references", "wait duration"],
+  "historyMustNotContain": ["identity JWT", "effect capability", "provider key", "endpoint chosen by worker"],
+  "prerequisiteReferences": {"P1":null,"P2":null,"P3":null,"P4":null,"stagingHost":null,"budget":null},
+  "faults": ["worker-kill", "host-loss", "scheduler-service-loss", "database-failover", "incompatible-version", "branching-partial", "revoked-on-resume", "unknown-no-resend"],
+  "temporal": {"workerDeploymentName":"continuum-qualification", "retainedBuilds":["v1","v2"], "versioningBehavior":"PINNED", "nativeDeploymentQualification":"NOT RUN"},
+  "pgBoss": {"retainedHandlers":[1,2],"projection":"explicit two-phase job; no generic workflow engine"},
+  "measure": ["engineering hours", "maintenance hours", "recovery toil minutes", "infrastructure cost", "representative p95 latency"],
+  "postWait": "obtain fresh workload identity and exact-action approval; a progress signal is never approval",
+  "schedulerDecision": "HELD"
+}

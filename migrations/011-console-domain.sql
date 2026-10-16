@@ -1,0 +1,76 @@
+-- Additive canonical human-product foundation. Apply only to reviewed staging.
+BEGIN;
+DO $$BEGIN IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='ct_console_reader') THEN CREATE ROLE ct_console_reader LOGIN;END IF;END$$;
+SET ROLE ct_owner;
+ALTER TABLE ct.tasks ADD COLUMN created_at timestamptz;
+ALTER TABLE ct.tasks ALTER COLUMN created_at SET DEFAULT clock_timestamp();
+CREATE TABLE ct.console_commands(tenant text NOT NULL,actor text NOT NULL,id uuid NOT NULL,idempotency_key text NOT NULL,kind text NOT NULL,body_digest text NOT NULL,expected_version bigint NOT NULL,status text NOT NULL CHECK(status IN('PENDING','APPLIED','DENIED')),result jsonb,error_code text,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(tenant,id),UNIQUE(tenant,actor,idempotency_key),FOREIGN KEY(actor) REFERENCES ct.identities(id),FOREIGN KEY(tenant) REFERENCES ct.tenants(id));
+CREATE FUNCTION ct.guard_console_command() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN
+ IF ROW(NEW.tenant,NEW.actor,NEW.id,NEW.idempotency_key,NEW.kind,NEW.body_digest,NEW.expected_version,NEW.created_at) IS DISTINCT FROM ROW(OLD.tenant,OLD.actor,OLD.id,OLD.idempotency_key,OLD.kind,OLD.body_digest,OLD.expected_version,OLD.created_at) OR OLD.status<>'PENDING' OR NEW.status NOT IN('APPLIED','DENIED') THEN RAISE EXCEPTION 'immutable command binding/final result';END IF;RETURN NEW;END$$;
+CREATE TRIGGER console_command_contract BEFORE UPDATE ON ct.console_commands FOR EACH ROW EXECUTE FUNCTION ct.guard_console_command();
+ALTER TABLE ct.approvals ADD COLUMN revision bigint NOT NULL DEFAULT 1;
+CREATE FUNCTION ct.guard_approval_revision() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN
+ IF ROW(NEW.digest,NEW.grant_version,NEW.approved_by,NEW.expires) IS DISTINCT FROM ROW(OLD.digest,OLD.grant_version,OLD.approved_by,OLD.expires) THEN NEW.revision=OLD.revision+1;ELSE NEW.revision=OLD.revision;END IF;RETURN NEW;END$$;
+CREATE TRIGGER approval_revision BEFORE UPDATE ON ct.approvals FOR EACH ROW EXECUTE FUNCTION ct.guard_approval_revision();
+CREATE TABLE ct.approval_history(seq bigserial PRIMARY KEY,tenant text NOT NULL,operation text NOT NULL,digest text NOT NULL,grant_version integer NOT NULL,approved_by text NOT NULL,expires timestamptz NOT NULL,decision_at timestamptz NOT NULL DEFAULT clock_timestamp(),command_id text,FOREIGN KEY(tenant,operation) REFERENCES ct.operations(tenant,id));
+CREATE TRIGGER approval_history_immutable BEFORE UPDATE OR DELETE ON ct.approval_history FOR EACH ROW EXECUTE FUNCTION ct.forbid_evidence_mutation();
+CREATE FUNCTION ct.record_approval_history() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,ct AS $$BEGIN
+ IF TG_OP='UPDATE' THEN IF ROW(NEW.digest,NEW.grant_version,NEW.approved_by,NEW.expires) IS NOT DISTINCT FROM ROW(OLD.digest,OLD.grant_version,OLD.approved_by,OLD.expires) THEN RETURN NEW;END IF;END IF;
+ INSERT INTO ct.approval_history(tenant,operation,digest,grant_version,approved_by,expires,command_id) VALUES(NEW.tenant,NEW.operation,NEW.digest,NEW.grant_version,NEW.approved_by,NEW.expires,NULLIF(current_setting('ct.console_command_id',true),''));RETURN NEW;END$$;
+REVOKE ALL ON FUNCTION ct.record_approval_history() FROM PUBLIC;
+CREATE TRIGGER approval_decision_history AFTER INSERT OR UPDATE ON ct.approvals FOR EACH ROW EXECUTE FUNCTION ct.record_approval_history();
+CREATE TABLE ct.projects(tenant text NOT NULL,id text NOT NULL,name text NOT NULL CHECK(length(name) BETWEEN 1 AND 200),objective text NOT NULL CHECK(length(objective)<=8000),revision bigint NOT NULL DEFAULT 1,created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(tenant,id),FOREIGN KEY(tenant) REFERENCES ct.tenants(id));
+CREATE TABLE ct.work_coordination(tenant text NOT NULL,task text NOT NULL,project text,accountable_vera text NOT NULL,revision bigint NOT NULL DEFAULT 1,waiting_reason text,PRIMARY KEY(tenant,task),FOREIGN KEY(tenant,task) REFERENCES ct.tasks(tenant,id),FOREIGN KEY(tenant,project) REFERENCES ct.projects(tenant,id),FOREIGN KEY(tenant,accountable_vera) REFERENCES ct.principals(tenant,id));
+CREATE TABLE ct.task_dependencies(tenant text NOT NULL,task text NOT NULL,depends_on text NOT NULL,source_version bigint NOT NULL,PRIMARY KEY(tenant,task,depends_on),CHECK(task<>depends_on),FOREIGN KEY(tenant,task) REFERENCES ct.tasks(tenant,id),FOREIGN KEY(tenant,depends_on) REFERENCES ct.tasks(tenant,id));
+CREATE TABLE ct.handoffs(tenant text NOT NULL,id uuid NOT NULL,task text NOT NULL,source_vera text NOT NULL,target_vera text NOT NULL,expected_revision bigint NOT NULL,status text NOT NULL CHECK(status IN('OFFERED','ACCEPTED','CANCELLED')),offered_by text NOT NULL REFERENCES ct.identities(id),accepted_by text REFERENCES ct.identities(id),created_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(tenant,id),FOREIGN KEY(tenant,task) REFERENCES ct.tasks(tenant,id),FOREIGN KEY(tenant,source_vera) REFERENCES ct.principals(tenant,id),FOREIGN KEY(tenant,target_vera) REFERENCES ct.principals(tenant,id));
+CREATE UNIQUE INDEX one_pending_handoff ON ct.handoffs(tenant,task) WHERE status='OFFERED';
+CREATE TABLE ct.incidents(tenant text NOT NULL,id text NOT NULL,root_id text NOT NULL,cause text NOT NULL,severity integer NOT NULL CHECK(severity BETWEEN 0 AND 4),status text NOT NULL CHECK(status IN('OPEN','ACKNOWLEDGED','RESOLVED')),title text NOT NULL CHECK(length(title)<=500),owner_vera text,revision bigint NOT NULL DEFAULT 1,source_version bigint NOT NULL,acknowledged_by text,acknowledged_at timestamptz,resolution_basis jsonb,observed_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(tenant,id),UNIQUE(tenant,root_id,cause,source_version),CHECK(status<>'RESOLVED' OR resolution_basis IS NOT NULL),FOREIGN KEY(tenant,owner_vera) REFERENCES ct.principals(tenant,id));
+CREATE TABLE ct.incident_tasks(tenant text NOT NULL,incident text NOT NULL,task text NOT NULL,PRIMARY KEY(tenant,incident,task),FOREIGN KEY(tenant,incident) REFERENCES ct.incidents(tenant,id),FOREIGN KEY(tenant,task) REFERENCES ct.tasks(tenant,id));
+CREATE TABLE ct.notifications(tenant text NOT NULL,id text NOT NULL,incident text NOT NULL,source_version bigint NOT NULL,channel text NOT NULL,delivery_state text NOT NULL CHECK(delivery_state IN('QUEUED','ACCEPTED','SENT','DELIVERED','FAILED','UNKNOWN','IN_APP')),read_at timestamptz,revision bigint NOT NULL DEFAULT 1,attempts integer NOT NULL DEFAULT 0,observed_at timestamptz NOT NULL DEFAULT clock_timestamp(),PRIMARY KEY(tenant,id),UNIQUE(tenant,incident,source_version,channel),FOREIGN KEY(tenant,incident) REFERENCES ct.incidents(tenant,id));
+CREATE TABLE ct.cognition_bindings(tenant text NOT NULL,principal text NOT NULL,revision bigint NOT NULL,provider text NOT NULL,model text NOT NULL,configuration_reference text NOT NULL,compatibility text NOT NULL CHECK(compatibility IN('UNKNOWN','TESTED','NEEDS_TESTING')),PRIMARY KEY(tenant,principal,revision),FOREIGN KEY(tenant,principal) REFERENCES ct.principals(tenant,id));
+CREATE TABLE ct.computer_observations(tenant text NOT NULL,computer text NOT NULL,generation integer NOT NULL,raw_state text CHECK(length(raw_state)<=128),provider_class text NOT NULL,health text NOT NULL CHECK(health IN('unknown','healthy','degraded','lost')),qualification_scope text NOT NULL CHECK(qualification_scope IN('NOT_RUN','LOCAL_FIXTURE','STAGING')),observed_at timestamptz NOT NULL,fresh_until timestamptz NOT NULL,checkpoint_status text,PRIMARY KEY(tenant,computer,generation),FOREIGN KEY(tenant,computer) REFERENCES ct.computers(tenant,id));
+ALTER TABLE ct.principals ADD COLUMN execution_mode text NOT NULL DEFAULT 'AGENT' CHECK(execution_mode IN('AGENT','HUMAN','PAUSED'));
+CREATE TABLE ct.manual_leases(tenant text NOT NULL,id uuid NOT NULL,computer text NOT NULL,principal text NOT NULL,human_identity text NOT NULL REFERENCES ct.identities(id),generation integer NOT NULL,expires timestamptz NOT NULL,ended_at timestamptz,PRIMARY KEY(tenant,id),FOREIGN KEY(tenant,computer) REFERENCES ct.computers(tenant,id),FOREIGN KEY(tenant,principal) REFERENCES ct.principals(tenant,id));
+CREATE UNIQUE INDEX one_manual_lease ON ct.manual_leases(tenant,computer) WHERE ended_at IS NULL;
+DO $$DECLARE t text;BEGIN FOREACH t IN ARRAY ARRAY['console_commands','approval_history','projects','work_coordination','task_dependencies','handoffs','incidents','incident_tasks','notifications','cognition_bindings','computer_observations','manual_leases'] LOOP
+ EXECUTE format('ALTER TABLE ct.%I ENABLE ROW LEVEL SECURITY',t);EXECUTE format('ALTER TABLE ct.%I FORCE ROW LEVEL SECURITY',t);
+ EXECUTE format('CREATE POLICY canonical_trusted ON ct.%I TO ct_owner,ct_governor,ct_authority_api USING(true) WITH CHECK(true)',t);
+ EXECUTE format('CREATE POLICY canonical_read ON ct.%I FOR SELECT TO ct_console_reader USING(true)',t);
+ EXECUTE format('CREATE POLICY tenant_read ON ct.%I FOR SELECT TO ct_tenant_a,ct_tenant_b USING(tenant=ct.my_tenant())',t);
+ END LOOP;END$$;
+DO $$DECLARE t text;BEGIN FOREACH t IN ARRAY ARRAY['principals','grants','operations','approvals','identities','assignments','tasks','task_operations','computers','context_heads','context_versions','artifact_manifests','evidence_heads','evidence_events','resource_limits','resource_reservations'] LOOP
+ EXECUTE format('CREATE POLICY console_read ON ct.%I FOR SELECT TO ct_console_reader USING(true)',t);
+ END LOOP;END$$;
+CREATE POLICY console_command_context ON ct.resource_limits TO ct_authority_api USING(true) WITH CHECK(true);
+CREATE POLICY console_command_reservations ON ct.resource_reservations TO ct_authority_api USING(true) WITH CHECK(true);
+RESET ROLE;
+GRANT USAGE ON SCHEMA ct TO ct_console_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA ct TO ct_console_reader;
+REVOKE SELECT ON ct.console_commands FROM ct_console_reader;
+GRANT SELECT ON ct.console_commands TO ct_console_reader;
+CREATE POLICY console_identity_lock ON ct.identities FOR UPDATE TO ct_console_reader USING(true) WITH CHECK(true);
+GRANT UPDATE(lock_tag) ON ct.identities TO ct_console_reader;
+GRANT SELECT ON ct.control TO ct_console_reader;
+GRANT SELECT,INSERT ON ct.console_commands,ct.projects,ct.work_coordination,ct.task_dependencies,ct.handoffs,ct.incidents,ct.incident_tasks,ct.notifications,ct.manual_leases TO ct_authority_api;
+GRANT UPDATE(status,result,error_code) ON ct.console_commands TO ct_authority_api;
+GRANT UPDATE(accountable_vera,project,revision,waiting_reason) ON ct.work_coordination TO ct_authority_api;
+GRANT DELETE ON ct.task_dependencies TO ct_authority_api;
+GRANT UPDATE(status,accepted_by) ON ct.handoffs TO ct_authority_api;
+GRANT UPDATE(status,acknowledged_by,acknowledged_at,revision) ON ct.incidents TO ct_authority_api;
+GRANT UPDATE(read_at,revision) ON ct.notifications TO ct_authority_api;
+GRANT UPDATE(ended_at) ON ct.manual_leases TO ct_authority_api;
+GRANT UPDATE(execution_mode,epoch) ON ct.principals TO ct_authority_api;
+GRANT SELECT ON ct.computers,ct.computer_observations,ct.manual_leases,ct.resource_limits,ct.resource_reservations TO ct_authority_api;
+GRANT INSERT ON ct.tasks TO ct_authority_api;
+GRANT UPDATE(status,revision) ON ct.tasks TO ct_authority_api;
+GRANT UPDATE(active_jobs,reserved_storage,spent_or_reserved_units) ON ct.resource_limits TO ct_authority_api;
+ALTER TABLE ct.resource_reservations ADD COLUMN console_lock_tag bigint NOT NULL DEFAULT 0;
+GRANT UPDATE(console_lock_tag) ON ct.resource_reservations TO ct_authority_api;
+GRANT SELECT ON ct.evidence_events TO ct_authority_api;
+GRANT INSERT ON ct.resource_reservations TO ct_authority_api;
+GRANT UPDATE(lock_tag) ON ct.computers TO ct_authority_api;
+GRANT SELECT ON ct.approval_history,ct.cognition_bindings TO ct_authority_api;
+GRANT SELECT,INSERT ON ct.cognition_bindings,ct.computer_observations TO ct_governor;
+GRANT SELECT,INSERT,UPDATE ON ct.projects,ct.work_coordination,ct.incidents,ct.incident_tasks,ct.notifications TO ct_governor;
+GRANT SELECT ON ct.approval_history TO ct_governor;
+COMMIT;

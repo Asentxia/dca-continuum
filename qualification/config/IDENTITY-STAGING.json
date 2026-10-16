@@ -1,0 +1,16 @@
+{
+ "enabled":false,
+ "enableConsequentialProductionExecution":false,
+ "deployLegacyPatches":false,
+ "approvedStageName":null,
+ "humanIdentity":{"issuer":null,"jwksUri":null,"resourceAudience":null,"requiredMfaMethod":"mfa","maxAuthAgeSeconds":300},
+ "machineIdentity":{"issuer":null,"jwksUri":null,"resourceAudience":null,"requiredBoundClaims":null,"platformTokenSource":null},
+ "issuerSigningKeyRef":null,
+ "controllerPublicJwksRef":null,
+ "managedVmStage":{"provider":"Runloop (provisional target)","accountRef":null,"placementRef":null},
+ "postgresHaStage":{"connectionSecretRef":null,"backupWalStoreRef":null,"independentFenceRef":null,"rpoRtoApproved":false},
+ "schedulerStage":{"temporalEndpoint":null,"pgBossStageRef":null,"persistent24hHostRef":null},
+ "safeProvider":{"provider":"github-public-readonly","action":"readCommit","owner":"Adaptive-Liquidity","repo":"Continuum","commit":"9ac4723b5390d22ed2d6aed9cf984cb0a32731ca","allowWrites":false},
+ "independentReviewer":null,
+ "ownerDeploymentApprovalRef":null
+}

@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+inheritance: false
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  fail_commit_status: false
+  poem: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: false
+    drafts: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+  finishing_touches:
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+  path_instructions:
+    - path: '**/*'
+      instructions: >-
+        Report-only review. Prioritize demonstrated correctness, security and
+        safety-contract defects. Distinguish optional style or debugging suggestions
+        from required fixes. Never recommend logging raw errors, credentials or
+        request payloads. Treat authenticated loopback fixtures in tests as fixtures,
+        not production endpoints. Preserve authority, recovery fences, tenant
+        isolation and UNKNOWN semantics. Passing tests do not authorize production
+        or merging; the owner controls those decisions.

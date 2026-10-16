@@ -1,0 +1,602 @@
+[
+  {
+    "id": "T-01",
+    "title": "Account sign-in/out; workspace selection",
+    "mapping": {
+      "User goal \u2192 durable product object": "Access private work / enrolled human + tenant",
+      "Authoritative read model": "R-SESSION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authenticated human; existing auth flow, proposed C-WORKSPACE",
+      "Backend enforcement \u2192 result/observation": "Verify server session and enrolled membership; clear old tenant cache; selected tenant observed",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Expired session preserves unsent intent only; no automatic submission",
+      "Maturity/availability": "Existing auth reuse; Continuum enrollment integration pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-01": "Two tenants and two browser tabs cannot leak old private data; expired session cannot approve",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-02",
+    "title": "Readiness prerequisite detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Reach a supported first result / readiness graph",
+      "Authoritative read model": "R-READINESS; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized tenant read; no setup mutation by implication",
+      "Backend enforcement \u2192 result/observation": "Server dependency graph includes qualification; health alone cannot mark ready",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Missing machine binding blocks dependent execution but not unrelated read-only work",
+      "Maturity/availability": "Proposed projection; live identity PARTIAL; action availability derived server-side, not UI presence",
+      "Acceptance test A-02": "Missing identity, Computer or verifier shows exact dependent blocked steps and no ready badge",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-03",
+    "title": "Work Focus select/filter/search/expand",
+    "mapping": {
+      "User goal \u2192 durable product object": "Find urgent cause / task + incident references",
+      "Authoritative read model": "R-FOCUS; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Authorized deterministic projection; preserve separate status axes and exact distinct impact",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Partial/offline snapshots disclose incompleteness",
+      "Maturity/availability": "Proposed derived projection; action availability derived server-side, not UI presence",
+      "Acceptance test A-03": "Two causes affecting one task count one distinct task; unrelated same-provider incidents remain separate",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-04",
+    "title": "Focus refresh order/new critical notice",
+    "mapping": {
+      "User goal \u2192 durable product object": "Inspect without losing place / snapshot + selection",
+      "Authoritative read model": "R-FOCUS; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Stable order while focused; explicit refresh updates snapshot",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "New critical event announces without focus theft",
+      "Maturity/availability": "Proposed view behavior; action availability derived server-side, not UI presence",
+      "Acceptance test A-04": "Late critical row never changes selected approval or keyboard focus; explicit refresh orders severity/impact/deadline/age/ID",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-05",
+    "title": "Task list/detail/activity/output links",
+    "mapping": {
+      "User goal \u2192 durable product object": "Understand work / proposed task + operation refs",
+      "Authoritative read model": "R-WORK; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Domain business phase differs from scheduler/effect; output access checked",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Missing/denied output uses generic response, no success substitution",
+      "Maturity/availability": "Proposed registry/projection; action availability derived server-side, not UI presence",
+      "Acceptance test A-05": "REQUESTED operation with approval and HTTP 200 never labels task completed",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-06",
+    "title": "New task form",
+    "mapping": {
+      "User goal \u2192 durable product object": "Record bounded goal / proposed task/admission record",
+      "Authoritative read model": "R-WORK; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Owner eligibility proposed; C-TASK-CREATE unavailable until reviewed",
+      "Backend enforcement \u2192 result/observation": "Validate immutable inputs, principal, integration action bounds/deadline; durable command result",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Lost response lookup; no second task or effect from resubmission",
+      "Maturity/availability": "Proposed domain command; action availability derived server-side, not UI presence",
+      "Acceptance test A-06": "Duplicate key/body returns same task; changed body conflicts; record accepted is not execution success",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-07",
+    "title": "Projects list/detail/resources",
+    "mapping": {
+      "User goal \u2192 durable product object": "Organize work / proposed project",
+      "Authoritative read model": "R-PROJECT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; create/edit/archive unavailable",
+      "Backend enforcement \u2192 result/observation": "Tenant ownership and object versions; resources separately authorized",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "No board drag mutation or archive from local state",
+      "Maturity/availability": "Proposed project contract; action availability derived server-side, not UI presence",
+      "Acceptance test A-07": "Filtered list and project list identify same tasks; archive/drag controls absent without commands",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-08",
+    "title": "Coordination/dependency inspector",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know responsibility / task owner + dependency edges",
+      "Authoritative read model": "R-PROJECT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Single accountable VERA; collaborators not delegated grants; versioned dependency relations",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Cycles/conflicts exposed; unresolved dependency stays blocked",
+      "Maturity/availability": "Proposed coordination read model; action availability derived server-side, not UI presence",
+      "Acceptance test A-08": "Display responsible owner, waiting-on and resource conflict without sharing cross-tenant identifiers",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-09",
+    "title": "Handoff management",
+    "mapping": {
+      "User goal \u2192 durable product object": "Transfer responsibility / proposed durable handoff",
+      "Authoritative read model": "R-PROJECT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Fresh owner proposed; C-HANDOFF unavailable until reviewed",
+      "Backend enforcement \u2192 result/observation": "CAS source owner/task version; destination acceptance; retain operation principal/grant",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Concurrent acceptance rejects; expiry never transfers authority",
+      "Maturity/availability": "Deferred command, bounded design; action availability derived server-side, not UI presence",
+      "Acceptance test A-09": "Two competing handoffs cannot create two owners; old approval does not authorize new principal",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-10",
+    "title": "VERA overview/continuity/history",
+    "mapping": {
+      "User goal \u2192 durable product object": "Identify accountable actor / ct.principals",
+      "Authoritative read model": "R-VERA; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; create/suspend unavailable",
+      "Backend enforcement \u2192 result/observation": "Epoch/generation/active from principal; join IDs without conflation",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Unknown binding labelled unknown, no model-derived identity",
+      "Maturity/availability": "Core implemented; console read pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-10": "Model replacement leaves principal ID unchanged; human/model/machine/Computer IDs rendered separately",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-11",
+    "title": "Workload identity enrollment detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Inspect enrolled machine / ct.identities",
+      "Authoritative read model": "R-IDENTITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; enrollment/disable unavailable",
+      "Backend enforcement \u2192 result/observation": "Independent issuer/subject/audience/kind mapping, active/version; redact secrets",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Disabled/expired/revoked reasons shown only when known",
+      "Maturity/availability": "P1 PARTIAL; operator enrollment source exists; action availability derived server-side, not UI presence",
+      "Acceptance test A-11": "Test issuer and fixture HMAC never advertised as production; JWT/key/cookie values absent from DOM/network/export",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-12",
+    "title": "Identity assignment form/detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Bind machine to exact work / ct.assignments",
+      "Authoritative read model": "R-IDENTITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Fresh enrolled human owner; proposed C-ASSIGN -> POST /assignments",
+      "Backend enforcement \u2192 result/observation": "Input identity,operation,expires; same tenant/principal/machine/digest, bounded deadline; durable assignment read",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale/duplicate conflict returns existing command or refresh, no assumed success",
+      "Maturity/availability": "Implemented seam; BFF/ledger pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-12": "Human identity cannot be assigned as worker; wrong principal/digest denied and recorded assignment matches operation",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-13",
+    "title": "Renewal freshness status",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know usable authority / issuance event + assignment",
+      "Authoritative read model": "R-IDENTITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; no browser renewal command",
+      "Backend enforcement \u2192 result/observation": "<=90000 ms effective expiry with all authority/identity bounds; online identity version at send",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale issuance cannot say currently renewable; blocked reason retains operation",
+      "Maturity/availability": "P1 PARTIAL; metadata projection pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-13": "Earlier identity/grant/assignment expiry shortens lifetime; disabled version rejects issued token before final send",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-14",
+    "title": "Cognition/model binding detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Understand replacement / proposed model binding revision",
+      "Authoritative read model": "R-VERA; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; model change unavailable",
+      "Backend enforcement \u2192 result/observation": "Model/config compatibility separate from principal and authority",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Provider outage shown as dependency; no uncertain-effect executor fallback",
+      "Maturity/availability": "Deferred binding integration; action availability derived server-side, not UI presence",
+      "Acceptance test A-14": "Replacement never resets operation ID or claims new authority/equivalent memory behavior",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-15",
+    "title": "Context/state provenance detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Inspect admitted facts / ct.context_items + proposed provenance",
+      "Authoritative read model": "R-CONTEXT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized context read; GET only; import/edit/delete unavailable",
+      "Backend enforcement \u2192 result/observation": "Tenant/version/digest/nonquarantine checks; derived indexes non-authoritative",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Corrupt/stale data quarantined/blocked; exact source retained",
+      "Maturity/availability": "Narrow local checks; R4 PARTIAL; full memory deferred; action availability derived server-side, not UI presence",
+      "Acceptance test A-15": "Stale expected version/corrupt digest/cross-tenant recall rejected; summary text cannot authorize an operation",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-16",
+    "title": "Approval queue/exact preview/technical disclosure",
+    "mapping": {
+      "User goal \u2192 durable product object": "Review exact action / ct.operations + ct.approvals",
+      "Authoritative read model": "R-OPERATION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Render complete immutable semantic binding and digest; preserve long fields",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Changed version replaces eligibility with stale warning; preview not silently edited",
+      "Maturity/availability": "Core implemented; human read pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-16": "Long Unicode/multiline params remain reviewable; injected markup inert; displayed preview digest matches approved binding",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-17",
+    "title": "Approve exact action",
+    "mapping": {
+      "User goal \u2192 durable product object": "Authorize one proposal / approval command + ct.approvals",
+      "Authoritative read model": "R-AUTHORITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Fresh enrolled human owner MFA; proposed C-APPROVE -> POST /approvals",
+      "Backend enforcement \u2192 result/observation": "Input operation,digest,expires; REQUESTED/current grant/epoch/generation/fence; transaction event + read-back",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale/expired/denied re-read; lost acknowledgement queries command, never auto-approves",
+      "Maturity/availability": "P1 PARTIAL; BFF/ledger/history pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-17": "MFA/auth_time boundary, changed digest/grant/fence and two tabs deny stale approval; approved label never means executed",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-18",
+    "title": "Approval invalidation/expiry status",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know authorization remains usable / approval binding",
+      "Authoritative read model": "R-AUTHORITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; reject/cancel/edit/re-propose unavailable",
+      "Backend enforcement \u2192 result/observation": "Separate historical approval from current eligibility; server time/versions",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "New operation requires separate review; no refresh extends scope",
+      "Maturity/availability": "Proposed eligibility projection; action availability derived server-side, not UI presence",
+      "Acceptance test A-18": "Clock skew cannot extend expiry; revoke/epoch/version change blocks action while retaining decision history",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-19",
+    "title": "Grant detail/policy/limits/reservations",
+    "mapping": {
+      "User goal \u2192 durable product object": "Understand current scope / ct.grants + principal + policy ref",
+      "Authoritative read model": "R-AUTHORITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Exact action/resource/version/expires/revoked/reserved; policy unknown if not implemented",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale budget or policy is not available balance/permission",
+      "Maturity/availability": "R3/R9 PARTIAL; policy extension pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-19": "Reservation differs from spend; absent policy version displays unknown, never invented epoch",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-20",
+    "title": "Create bounded grant",
+    "mapping": {
+      "User goal \u2192 durable product object": "Set permitted scope / ct.grants",
+      "Authoritative read model": "R-AUTHORITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Fresh enrolled human owner MFA; proposed C-GRANT -> POST /grants",
+      "Backend enforcement \u2192 result/observation": "Exact keys id,principal,action,resource,expires,maxCost,budget; <=48h; approval_required true",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Invalid bounds rejected; no wildcard or generalized write promotion",
+      "Maturity/availability": "Seam implemented; protected mutation unavailable; action availability derived server-side, not UI presence",
+      "Acceptance test A-20": "Expiry >48h, negative/unsafe integer cost, budget<maxCost and unsupported selector cannot enable action",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-21",
+    "title": "Revoke grant",
+    "mapping": {
+      "User goal \u2192 durable product object": "End future admission / versioned grant revoke",
+      "Authoritative read model": "R-AUTHORITY; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Fresh enrolled human owner MFA; proposed C-REVOKE -> POST /revoke",
+      "Backend enforcement \u2192 result/observation": "Input grant; durable revocation/version and event; subsequent admission denied",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "In-flight/UNKNOWN remain visible; no recall promise",
+      "Maturity/availability": "P1 PARTIAL; durable command lookup pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-21": "Concurrent revoke/send preserves documented ordering; revocation badge only after persisted result, no all-effects-stopped claim",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-22",
+    "title": "Operation lifecycle detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know external result / ct.operations + observation",
+      "Authoritative read model": "R-OPERATION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Exact seven enums and transitions; controller alone writes effect result",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Timeout/lost ack -> UNKNOWN; no generic retry or alternative executor",
+      "Maturity/availability": "P2 PARTIAL; read proof narrow; action availability derived server-side, not UI presence",
+      "Acceptance test A-22": "UNKNOWN cannot acquire resend control; HTTP 2xx/model/log/hash receipt cannot turn it COMMITTED",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-23",
+    "title": "Pinned GitHub read observation",
+    "mapping": {
+      "User goal \u2192 durable product object": "Verify intended read / exact commit/tree observation",
+      "Authoritative read model": "R-OPERATION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; no direct controller or arbitrary URL control",
+      "Backend enforcement \u2192 result/observation": "Fixed commit/tree plus independent second endpoint match; supported COMMITTED interpretation",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Verifier outage/mismatch remains UNKNOWN; later fresh read may satisfy intended read",
+      "Maturity/availability": "Narrow public-read PASS; P2 PARTIAL; action availability derived server-side, not UI presence",
+      "Acceptance test A-23": "Tiny timeout followed by successful read-back says verified intended read, never first request executed or write succeeded",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-24",
+    "title": "Evidence filters/pagination/detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Assess provenance / evidence events + provider observations",
+      "Authoritative read model": "R-EVIDENCE; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized tenant read; GET only",
+      "Backend enforcement \u2192 result/observation": "Sequence/lineage/transaction links; integrity distinguished from external truth",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Truncation/chain gap/missing observation visibly unconfirmed",
+      "Maturity/availability": "R5 PARTIAL; projection/pagination pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-24": "Valid chain with missing/mismatched provider observation has no verified-success badge",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-25",
+    "title": "Evidence export",
+    "mapping": {
+      "User goal \u2192 durable product object": "Retain permitted evidence / proposed export manifest",
+      "Authoritative read model": "R-EVIDENCE; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant field permissions; C-EXPORT unavailable until reviewed",
+      "Backend enforcement \u2192 result/observation": "Server redaction, cursor/snapshot, completeness and source manifest; audited export",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Denied or partial export disclosed; no credentials in artifact",
+      "Maturity/availability": "Deferred export contract; action availability derived server-side, not UI presence",
+      "Acceptance test A-25": "Cross-tenant/private fields excluded; partial archive includes completeness marker and original observation provenance",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-26",
+    "title": "Computer list/detail/raw lifecycle",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know actual environment / logical Computer + placement",
+      "Authoritative read model": "R-COMPUTER; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized human read; GET only",
+      "Backend enforcement \u2192 result/observation": "Keep all 15 raw states, separate health/checkpoint/job/generation/fence; provider ref redacted",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "restore_failed/recovery_failed/cleanup_needed/error/deleting/deleted are specific",
+      "Maturity/availability": "Legacy source exists; P3 NOT RUN; new projection pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-26": "Each raw state has distinct accessible text; generation unknown cannot become workspaceRevision; future enum disables actions",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-27",
+    "title": "Computer pause/resume/restart/wake",
+    "mapping": {
+      "User goal \u2192 durable product object": "Change supported legacy environment / lifecycle job",
+      "Authoritative read model": "R-COMPUTER; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Human ownership; legacy adapter only after review; C-LIFECYCLE not enabled by this spec",
+      "Backend enforcement \u2192 result/observation": "ComputerService legal transitions and server action eligibility; persisted job/state then provider observation",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Failed wake/rebuild/recovery retains exact state; no effect resume implied",
+      "Maturity/availability": "Legacy seams present; qualification pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-27": "Lifecycle 202 never says recovered; changed generation/state rejects stale action; recovery failure cannot display stopped",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-28",
+    "title": "Checkpoint/recovery/fence inspector",
+    "mapping": {
+      "User goal \u2192 durable product object": "Understand continuity / checkpoint + artifact + placement fence",
+      "Authoritative read model": "R-COMPUTER; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized human read; GET only; restore/delete/isolate unavailable",
+      "Backend enforcement \u2192 result/observation": "Manifest/digest/base image/revision and old generation fence verified independently",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Restore/fence failure blocks admission; cleanup obligations retained",
+      "Maturity/availability": "P3/R6 NOT RUN; action availability derived server-side, not UI presence",
+      "Acceptance test A-28": "Ready checkpoint with failed restore stays restore_failed; old-generation requests denied before new admission",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-29",
+    "title": "Manual session view/frame/viewport",
+    "mapping": {
+      "User goal \u2192 durable product object": "Observe safely / human desktop session",
+      "Authoritative read model": "R-COMPUTER; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Human owner via reviewed legacy desktop open/screen/close; final session contract pending",
+      "Backend enforcement \u2192 result/observation": "No provider credentials; observed frame time/dimensions, lease/mode; viewing cannot send input",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale/disconnected frame clearly labelled; lease governs close, not tab lifetime",
+      "Maturity/availability": "Legacy source exists; boundary qualification pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-29": "Viewing cannot act; expired/revoked/missing lease fails closed across instances; screenshot not persisted by default",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-30",
+    "title": "Manual take control/hand back/input",
+    "mapping": {
+      "User goal \u2192 durable product object": "Intervene as human / proposed durable control lease",
+      "Authoritative read model": "R-COMPUTER; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Human owner; C-TAKEOVER/C-HANDBACK only after fencing review; legacy take_control/hand_back/act audited",
+      "Backend enforcement \u2192 result/observation": "Exclusive human/agent mode fence, generation/expiry, authoritative action result; manual not verified agent effect",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Input error displayed; tab/lease loss disables input; hand back does not resume agent",
+      "Maturity/availability": "Final safety contract missing; unavailable for governed deployment; action availability derived server-side, not UI presence",
+      "Acceptance test A-30": "Two tabs cannot own control; missing session row denies; privileged browser unreachable by agent; Tab/Escape usable locally",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-31",
+    "title": "Recovery UNKNOWN detail/observation status",
+    "mapping": {
+      "User goal \u2192 durable product object": "Own uncertain effect / operation + incident",
+      "Authoritative read model": "R-INCIDENT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; no browser reconcile seam",
+      "Backend enforcement \u2192 result/observation": "Original immutable ID, last provider observation, owner, next trusted check and unavailable reason",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Post-revocation observation remains blocked until independent path; never reinstate write grant",
+      "Maturity/availability": "Core reconciliation internal; human observation contract missing; action availability derived server-side, not UI presence",
+      "Acceptance test A-31": "Revoked grant plus lost verifier remains owned UNKNOWN, without retry/resume/regrant control",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-32",
+    "title": "Incident acknowledgement/ownership",
+    "mapping": {
+      "User goal \u2192 durable product object": "Record response / proposed incident decision",
+      "Authoritative read model": "R-INCIDENT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Authorized human command proposed C-ACK; unavailable until reviewed",
+      "Backend enforcement \u2192 result/observation": "CAS incident version/owner; durable ack record, independent resolution basis",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Ack timeout lookup; ack never resolves uncertain effect",
+      "Maturity/availability": "Proposed incident API; action availability derived server-side, not UI presence",
+      "Acceptance test A-32": "Acknowledged incident with UNKNOWN operation stays unresolved and still linked from Work",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-33",
+    "title": "Integrations detail/setup status",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know usable provider / adapter + connection metadata",
+      "Authoritative read model": "R-INTEGRATION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; reconnect setup only reviewed provider flow",
+      "Backend enforcement \u2192 result/observation": "Exact resource/action, version, scope, health, qualification; server credentials only",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Expired connection groups affected tasks; refresh does not broaden grant",
+      "Maturity/availability": "Read adapter implemented; connection UI integration pending; action availability derived server-side, not UI presence",
+      "Acceptance test A-33": "Public read PASS never enables protected write; unauthorized configuration hidden; setup metadata contains no credential values",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-34",
+    "title": "Notifications inbox/delivery detail/preferences",
+    "mapping": {
+      "User goal \u2192 durable product object": "Know alert reached owner / notification + delivery attempts",
+      "Authoritative read model": "R-NOTIFICATION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; C-MARK-READ/C-PREFERENCES unavailable until reviewed",
+      "Backend enforcement \u2192 result/observation": "Outbox/inbox dedup, channel attempts/status, separate incident status",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Delivery failed/unknown retains critical in-app condition; retry bounded internal",
+      "Maturity/availability": "Proposed durable delivery API; action availability derived server-side, not UI presence",
+      "Acceptance test A-34": "Duplicate events produce one incident group; delivered/read notification does not resolve cause; channel failure visible",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-35",
+    "title": "Usage/budget/limit detail",
+    "mapping": {
+      "User goal \u2192 durable product object": "Understand enforced capacity / grant reservation + proposed meter",
+      "Authoritative read model": "R-USAGE; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant read; GET only; limit edits unavailable",
+      "Backend enforcement \u2192 result/observation": "Source/unit/period/freshness; measured/estimated/reserved distinct; enforcement server-side",
+      "Evidence": "E1 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Stale meter labelled stale; exhausted vs queued vs denied separate",
+      "Maturity/availability": "R9 PARTIAL; real money/token enforcement unqualified; action availability derived server-side, not UI presence",
+      "Acceptance test A-35": "Stale usage never shows zero spend/free capacity; concurrency rejection has reason, no invisible retry storm",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-36",
+    "title": "Billing portal/account terms",
+    "mapping": {
+      "User goal \u2192 durable product object": "Manage existing subscription / provider subscription/invoice",
+      "Authoritative read model": "R-USAGE; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Existing authorized billing workflow; no new commercial commands",
+      "Backend enforcement \u2192 result/observation": "Reuse reviewed catalog/portal/webhook truth; subscription not effect authority",
+      "Evidence": "E2 + E3; apply separated evidence profile above",
+      "Failure/recovery": "Payment pending/error/cancelled independent of in-flight effects",
+      "Maturity/availability": "Legacy billing reuse; no Continuum commercial readiness inferred; action availability derived server-side, not UI presence",
+      "Acceptance test A-36": "Duplicate portal purchase cannot create second subscription; invoice source and entitlement do not imply grant",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-37",
+    "title": "Deployment/data/support/maturity",
+    "mapping": {
+      "User goal \u2192 durable product object": "Assess limitations / trusted deployment + qualification record",
+      "Authoritative read model": "R-DEPLOYMENT; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Tenant-authorized metadata GET; no scheduler/HA toggle",
+      "Backend enforcement \u2192 result/observation": "Actual scope, retention, residency and tested RPO/RTO; exact gate statuses",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Missing values unknown; unsupported features explain dependency",
+      "Maturity/availability": "P3-P5/R10 NOT RUN; action availability derived server-side, not UI presence",
+      "Acceptance test A-37": "No HA/DR/security-certification badge or scheduler selector from design/default recommendation",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-38",
+    "title": "Shared navigation/back/disclosure/copy/pagination",
+    "mapping": {
+      "User goal \u2192 durable product object": "Inspect durable objects / authorized references and view state",
+      "Authoritative read model": "R-SESSION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Human read; GET only, local view actions",
+      "Backend enforcement \u2192 result/observation": "Semantic links/buttons; copy only safe displayed IDs; cursor scoped to snapshot",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Denied objects generic; stale cache cleared on account switch",
+      "Maturity/availability": "UI proposed; action availability derived server-side, not UI presence",
+      "Acceptance test A-38": "Back restores selection/filter/scroll; keyboard and mobile navigation reach same exact detail without hidden fields",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-39",
+    "title": "Shared stale/offline/error/unknown-schema states",
+    "mapping": {
+      "User goal \u2192 durable product object": "Avoid acting on stale truth / versioned envelope",
+      "Authoritative read model": "R-SESSION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Read permission; mutations unavailable while eligibility stale",
+      "Backend enforcement \u2192 result/observation": "Latest version wins; fresh_until/server_time; network acceptance never result",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Reconnect revalidates; slow old responses ignored; no automatic resend",
+      "Maturity/availability": "UI/read protocol proposed; action availability derived server-side, not UI presence",
+      "Acceptance test A-39": "Out-of-order response, disconnect after click and unknown enum yield no false success or unauthorized control",
+      "Execution status": "NOT RUN"
+    }
+  },
+  {
+    "id": "T-40",
+    "title": "Shared mobile/zoom/keyboard/reduced-motion states",
+    "mapping": {
+      "User goal \u2192 durable product object": "Operate accessibly / same authorized objects",
+      "Authoritative read model": "R-SESSION; authoritative owner and freshness per specification \u00a7\u00a73\u20134",
+      "Required role/authority \u2192 human API/command": "Same authority and commands; presentation grants nothing",
+      "Backend enforcement \u2192 result/observation": "WCAG 2.2 AA target; semantic controls, contrast, focus, reflow; no swipe approval",
+      "Evidence": "E3; apply separated evidence profile above",
+      "Failure/recovery": "Focus restoration; exact content reviewable at narrow width; local escape from remote capture",
+      "Maturity/availability": "Accessibility target; checks NOT RUN; action availability derived server-side, not UI presence",
+      "Acceptance test A-40": "320 CSS px/400% zoom/200% text, keyboard, screen reader and reduced motion preserve preview and action safety",
+      "Execution status": "NOT RUN"
+    }
+  }
+]
