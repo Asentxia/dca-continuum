@@ -276,7 +276,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .artifacts/import-pilot
-          git rev-parse HEAD HEAD^{tree} > .artifacts/import-pilot/GIT-IDENTITY.txt
+          git rev-parse HEAD "HEAD^{tree}" > .artifacts/import-pilot/GIT-IDENTITY.txt
           git status --porcelain --untracked-files=no > .artifacts/import-pilot/SOURCE-STATUS.txt
           git merge-base --is-ancestor 800091f08ce1eb8843813a8d48f681cd6a3ad5df HEAD
           python3 tools/canonical-source-digest.py > .artifacts/import-pilot/TESTED-SOURCE.json
@@ -315,7 +315,7 @@ jobs:
             test -z "$(ip route show default)"
             ip -j address show > .artifacts/import-pilot/NAMESPACE-ADDRESSES.json
             /usr/sbin/runuser -u "$1" -- /usr/bin/env -i HOME="$3" PATH="$(dirname "$2"):/usr/bin:/bin" CT_CHROMIUM_PATH="$4" "$2" tools/ci/browser-network-preflight.mjs
-          ' -- "$(id -un)" "$(command -v node)" "$HOME" "$CT_CHROMIUM_PATH" > .artifacts/import-pilot/BROWSER-PRECONDITION.json
+          ' -- "$(id -un)" "$(command -v node)" "$HOME" "$CT_CHROMIUM_PATH" | tee .artifacts/import-pilot/BROWSER-PRECONDITION.json > /dev/null
       - name: Capture actual production and complete dependency audits
         if: always() && steps.dependencies.outcome == 'success'
         shell: bash
