@@ -2,6 +2,7 @@ name: PR CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
   workflow_dispatch:
@@ -75,6 +76,8 @@ jobs:
           include-hidden-files: true
 
   canonical:
+    # Draft imports run the bounded pilot; ready PRs retain full verification.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     name: Canonical local verification
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -214,3 +217,100 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
           include-hidden-files: true
+
+  import-preflight:
+    name: Draft import capability and dependency pilot
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact draft head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up frontend Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.23.3
+      - name: Record frontend binary
+        run: echo "CT_NODE22_BIN=$(dirname "$(command -v node)")" >> "$GITHUB_ENV"
+      - name: Set up backend Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.14.1
+      - name: Record source identity and capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/import-pilot
+          git rev-parse HEAD HEAD^{tree} > .artifacts/import-pilot/GIT-IDENTITY.txt
+          git status --porcelain --untracked-files=no > .artifacts/import-pilot/SOURCE-STATUS.txt
+          git merge-base --is-ancestor 800091f08ce1eb8843813a8d48f681cd6a3ad5df HEAD
+          python3 tools/canonical-source-digest.py > .artifacts/import-pilot/TESTED-SOURCE.json
+          python3 tools/nexus-verify-provenance.py > .artifacts/import-pilot/SOURCE-PROVENANCE.txt
+          test "$(node --version)" = v24.14.1
+          test "$("$CT_NODE22_BIN/node" --version)" = v22.23.3
+          python3 -c 'import sys; assert sys.version_info >= (3,11)'
+          command -v rustup
+          command -v ip
+          sudo -n true
+          sudo unshare --mount --net true
+          printf 'Pilot only; PostgreSQL/native canonical profile still requires qualification.\n' > .artifacts/import-pilot/SCOPE.txt
+      - name: Install locked dependencies without lifecycle scripts
+        id: dependencies
+        run: npm ci --ignore-scripts
+      - name: Install pinned Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --no-install playwright install --with-deps chromium
+          browser=$(node -p "require('playwright').chromium.executablePath()")
+          printf 'CT_CHROMIUM_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+      - name: Prove real browser offline transitions in an isolated local network
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- /bin/bash -euo pipefail -c '
+            test "$(readlink /proc/self/ns/net)" != "$(readlink /proc/1/ns/net)"
+            python3 -c '\''import socket; assert {n for _,n in socket.if_nameindex()} == {"lo"}'\''
+            ip link set lo up
+            ip link add ct-ci-a type veth peer name ct-ci-b
+            ip addr add 192.0.2.1/30 dev ct-ci-a
+            ip addr add 192.0.2.2/30 dev ct-ci-b
+            ip link set ct-ci-a up
+            ip link set ct-ci-b up
+            test -z "$(ip route show default)"
+            ip -j address show > .artifacts/import-pilot/NAMESPACE-ADDRESSES.json
+            /usr/sbin/runuser -u "$1" -- /usr/bin/env -i HOME="$3" PATH="$(dirname "$2"):/usr/bin:/bin" CT_CHROMIUM_PATH="$4" "$2" tools/ci/browser-network-preflight.mjs
+          ' -- "$(id -un)" "$(command -v node)" "$HOME" "$CT_CHROMIUM_PATH" > .artifacts/import-pilot/BROWSER-PRECONDITION.json
+      - name: Capture actual production and complete dependency audits
+        if: always() && steps.dependencies.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          npm audit --omit=dev --json > .artifacts/import-pilot/DEPENDENCY-AUDIT-PRODUCTION.json
+          production=$?
+          npm audit --json > .artifacts/import-pilot/DEPENDENCY-AUDIT-COMPLETE.json
+          complete=$?
+          printf '{"productionExit":%s,"completeExit":%s}\n' "$production" "$complete" > .artifacts/import-pilot/DEPENDENCY-AUDIT-EXITS.json
+          test "$production" -eq 0 && test "$complete" -eq 0
+      - name: Confirm source stayed unchanged
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/canonical-source-digest.py > .artifacts/import-pilot/SOURCE-AFTER.json
+          cmp .artifacts/import-pilot/TESTED-SOURCE.json .artifacts/import-pilot/SOURCE-AFTER.json
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Upload bounded pilot evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: import-pilot-${{ github.event.pull_request.head.sha }}
+          path: .artifacts/import-pilot/*
+          if-no-files-found: warn
+          retention-days: 7
