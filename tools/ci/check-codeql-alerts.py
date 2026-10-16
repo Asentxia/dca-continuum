@@ -8,6 +8,42 @@ import subprocess
 import sys
 
 
+def resolve_rule(tool, result):
+    descriptor = result.get("rule", {})
+    rule_id = result.get("ruleId") or descriptor.get("id")
+    if result.get("ruleId") and descriptor.get("id") and result["ruleId"] != descriptor["id"]:
+        raise ValueError("Inconsistent rule identifiers")
+    component = descriptor.get("toolComponent", {})
+    if "index" in component:
+        index = component["index"]
+        extensions = tool.get("extensions", [])
+        if type(index) is not int or not 0 <= index < len(extensions):
+            raise ValueError("Invalid rule component index")
+        components = [extensions[index]]
+    elif component:
+        components = [item for item in [tool.get("driver", {})] + tool.get("extensions", [])
+                      if ((component.get("guid") and item.get("guid") == component["guid"])
+                          or (component.get("name") and item.get("name") == component["name"]))]
+        if len(components) != 1:
+            raise ValueError("Unknown or ambiguous rule component")
+    else:
+        components = [tool.get("driver", {})] + tool.get("extensions", [])
+    rule_index = descriptor.get("index", result.get("ruleIndex"))
+    if rule_index is not None:
+        # Legacy ruleIndex is relative to the driver; descriptor.index uses its component.
+        rules = (components[0] if component else tool.get("driver", {})).get("rules", [])
+        if type(rule_index) is not int or not 0 <= rule_index < len(rules):
+            raise ValueError("Invalid rule index")
+        rule = rules[rule_index]
+        if rule_id and rule.get("id") != rule_id:
+            raise ValueError("Rule index/identifier mismatch")
+        return rule
+    matches = [rule for item in components for rule in item.get("rules", []) if rule.get("id") == rule_id]
+    if len(matches) != 1:
+        raise ValueError("Result references an unknown or ambiguous rule")
+    return matches[0]
+
+
 def evaluate(document):
     if document.get("version") != "2.1.0" or not document.get("runs"):
         raise ValueError("Missing or unsupported SARIF evidence")
@@ -21,12 +57,9 @@ def evaluate(document):
                 raise ValueError("CodeQL execution failed")
             if any(n.get("level") == "error" for n in invocation.get("toolExecutionNotifications", [])):
                 raise ValueError("CodeQL reported an execution error")
-        rules = {rule["id"]: rule for rule in driver.get("rules", [])}
         for result in run["results"]:
-            rule_id = result.get("ruleId")
-            if rule_id not in rules:
-                raise ValueError("Result references an unknown rule")
-            rule = rules[rule_id]
+            rule = resolve_rule(run["tool"], result)
+            rule_id = rule["id"]
             level = result.get("level", rule.get("defaultConfiguration", {}).get("level", "warning"))
             severity = rule.get("properties", {}).get("security-severity")
             high = False

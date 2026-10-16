@@ -67,6 +67,36 @@ class GateTests(unittest.TestCase):
         d = evidence("9"); d["runs"][0]["results"][0]["suppressions"] = [{"status": "accepted"}]
         self.assertTrue(gate.evaluate(d))
 
+    def extension_evidence(self):
+        d = evidence("8.1")
+        driver = d["runs"][0]["tool"]["driver"]
+        rules = driver.pop("rules")
+        driver["rules"] = []
+        d["runs"][0]["tool"]["extensions"] = [{"name": "codeql/test-queries", "rules": rules}]
+        d["runs"][0]["results"][0]["rule"] = {"id": "test/rule", "index": 0, "toolComponent": {"index": 0}}
+        return d
+
+    def test_real_extension_format_still_blocks_high(self):
+        self.assertTrue(gate.evaluate(self.extension_evidence()))
+
+    def test_bad_extension_index_rejected(self):
+        d = self.extension_evidence()
+        d["runs"][0]["results"][0]["rule"]["toolComponent"]["index"] = 99
+        with self.assertRaises(ValueError):
+            gate.evaluate(d)
+
+    def test_rule_index_mismatch_rejected(self):
+        d = self.extension_evidence()
+        d["runs"][0]["results"][0]["rule"]["index"] = -1
+        with self.assertRaises(ValueError):
+            gate.evaluate(d)
+
+    def test_conflicting_rule_ids_rejected(self):
+        d = self.extension_evidence()
+        d["runs"][0]["results"][0]["rule"]["id"] = "other/rule"
+        with self.assertRaises(ValueError):
+            gate.evaluate(d)
+
     def test_missing_files_rejected(self):
         with self.assertRaises(ValueError):
             gate.main("/nonexistent/continuum-codeql-test/*.sarif")
