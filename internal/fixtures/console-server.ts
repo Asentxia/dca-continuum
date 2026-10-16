@@ -13,7 +13,7 @@ import { WorkCoordination } from '../../src/console/coordination.js';
 import { consoleApi } from '../../src/console/api.js';
 if (
   process.env.CT_CONSOLE_MODE !== 'LOCAL_FIXTURE' ||
-  !['ct_console_browser', 'ct_console_dev'].includes(
+  !['ct_console_browser', 'ct_console_dev', 'ct_console_test'].includes(
     process.env.CT_DATABASE ?? '',
   )
 )
@@ -24,19 +24,38 @@ const f = await fixture('focus'),
   writer = pool('ct_authority_api');
 const coord = new WorkCoordination(writer, fence),
   owner = await f.actor('user');
-await admin.query(
-  "INSERT INTO ct.computers(tenant,id,principal,generation,state) VALUES('a','continuity-desk',$1,1,'RUNNING')",
-  [f.principal],
-);
-await gov.query(
-  "INSERT INTO ct.computer_observations VALUES('a','continuity-desk',1,'stopped','local-process','unknown','LOCAL_FIXTURE',now(),now()+interval '10 minutes',NULL)",
-);
-await coord.project(
-  owner,
-  'operations',
-  'Operating week',
-  'Local test: exact decisions, durable continuity and honest outcomes.',
-);
+async function missing(sql: string, params: unknown[] = []) {
+  return (await admin.query(sql, params)).rows.length === 0;
+}
+if (
+  await missing("SELECT 1 FROM ct.computers WHERE tenant='a' AND id=$1", [
+    'continuity-desk',
+  ])
+)
+  await admin.query(
+    "INSERT INTO ct.computers(tenant,id,principal,generation,state) VALUES('a','continuity-desk',$1,1,'RUNNING')",
+    [f.principal],
+  );
+if (
+  await missing(
+    "SELECT 1 FROM ct.computer_observations WHERE tenant='a' AND computer=$1 AND generation=1",
+    ['continuity-desk'],
+  )
+)
+  await gov.query(
+    "INSERT INTO ct.computer_observations VALUES('a','continuity-desk',1,'stopped','local-process','unknown','LOCAL_FIXTURE',now(),now()+interval '10 minutes',NULL)",
+  );
+if (
+  await missing("SELECT 1 FROM ct.projects WHERE tenant='a' AND id=$1", [
+    'operations',
+  ])
+)
+  await coord.project(
+    owner,
+    'operations',
+    'Operating week',
+    'Local test: exact decisions, durable continuity and honest outcomes.',
+  );
 for (const example of [
   {
     id: 'review-vendor',
@@ -60,6 +79,12 @@ for (const example of [
   },
   { id: 'draft-summary', title: 'Prepare the board summary', state: 'planned' },
 ]) {
+  if (
+    !(await missing("SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1", [
+      't-' + example.id,
+    ]))
+  )
+    continue;
   const { x } = await f.intent(
     example.id,
     ['unknown', 'verified', 'denied'].includes(example.state),
@@ -91,32 +116,49 @@ for (const example of [
     await f.controller.dispatch(cap, x.id);
   }
 }
-await f.product.createTask(owner, {
-  id: 'work-next-week',
-  principal: f.principal,
-  objective: 'Plan the next operating week',
-  deadline: new Date(Date.now() + 3600000).toISOString(),
-  ...f.admission.a,
-});
-await coord.link(owner, 'work-next-week', 'operations', 0);
-await gov.query(
-  "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
-  [f.principal],
-);
-await gov.query(
-  "INSERT INTO ct.incident_tasks VALUES('a','unknown-ledger','t-ledger-uncertain')",
-);
-await gov.query(
-  "INSERT INTO ct.notifications(tenant,id,incident,source_version,channel,delivery_state) VALUES('a','ledger-notice','unknown-ledger',1,'in-app','IN_APP')",
-);
+if (
+  await missing("SELECT 1 FROM ct.tasks WHERE tenant='a' AND id=$1", [
+    'work-next-week',
+  ])
+) {
+  await f.product.createTask(owner, {
+    id: 'work-next-week',
+    principal: f.principal,
+    objective: 'Plan the next operating week',
+    deadline: new Date(Date.now() + 3600000).toISOString(),
+    ...f.admission.a,
+  });
+  await coord.link(owner, 'work-next-week', 'operations', 0);
+}
+if (
+  await missing("SELECT 1 FROM ct.incidents WHERE tenant='a' AND id=$1", [
+    'unknown-ledger',
+  ])
+) {
+  await gov.query(
+    "INSERT INTO ct.incidents(tenant,id,root_id,cause,severity,status,title,owner_vera,source_version) VALUES('a','unknown-ledger','ledger-uncertain','LOST_ACK',0,'OPEN','Provider acknowledgement missing — retain uncertainty',$1,1)",
+    [f.principal],
+  );
+  await gov.query(
+    "INSERT INTO ct.incident_tasks VALUES('a','unknown-ledger','t-ledger-uncertain')",
+  );
+  await gov.query(
+    "INSERT INTO ct.notifications(tenant,id,incident,source_version,channel,delivery_state) VALUES('a','ledger-notice','unknown-ledger',1,'in-app','IN_APP')",
+  );
+}
 const contextPool = pool('ct_context_service');
-await new ContextService(contextPool).ingest(await f.actor('machine'), {
-  id: 'operating-notes',
-  expectedVersion: 0,
-  payload: { text: 'A context fact is not permission.' },
-  source: { kind: 'document', reference: 'local-fixture:operating-notes' },
-  ttlSeconds: 3600,
-});
+if (
+  await missing("SELECT 1 FROM ct.context_heads WHERE tenant='a' AND id=$1", [
+    'operating-notes',
+  ])
+)
+  await new ContextService(contextPool).ingest(await f.actor('machine'), {
+    id: 'operating-notes',
+    expectedVersion: 0,
+    payload: { text: 'A context fact is not permission.' },
+    source: { kind: 'document', reference: 'local-fixture:operating-notes' },
+    ttlSeconds: 3600,
+  });
 await contextPool.end();
 const api = consoleApi(
   f.human,

@@ -14,6 +14,7 @@
     "build:backend": "tsc",
     "test:canonical": "bash tools/run-canonical-tests.sh",
     "dev:console": "bash tools/run-console.sh",
+    "dev:console:reset": "bash tools/reset-console-db.sh",
     "build:console": "bash tools/web-node22.sh build",
     "typecheck:console": "bash tools/web-node22.sh typecheck",
     "test:console": "bash tools/web-node22.sh test",

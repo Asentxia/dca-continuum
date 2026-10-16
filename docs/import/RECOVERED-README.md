@@ -50,9 +50,10 @@ The reset flags authorize only named disposable databases within the verified lo
 
 ```bash
 npm run dev:console
+CT_RESET_CONSOLE_FIXTURE=yes npm run dev:console:reset
 ```
 
-This intentionally builds/runs a **LOCAL TEST** console/API on loopback. Short-lived fixture identities are not real AuthKit or workload identity. Human commands record tasks, exact approvals/assignments/grants and acknowledgements; approval is never execution. UNKNOWN has no generic Retry action. Unsupported capabilities remain explicitly unavailable.
+`npm run dev:console` builds and runs a **LOCAL TEST** console/API on loopback and leaves an existing owned `ct_console_dev` in place. `npm run dev:console:reset` is the separate destructive command. It runs only when `CT_RESET_CONSOLE_FIXTURE=yes` is already set, and it still refuses a cluster that is not this checkout. Short-lived fixture identities are not real AuthKit or workload identity. Human commands record tasks, exact approvals/assignments/grants and acknowledgements; approval is never execution. UNKNOWN has no generic Retry action. Unsupported capabilities remain explicitly unavailable.
 
 ## Product builds — not deployment
 

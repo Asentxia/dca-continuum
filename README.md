@@ -260,6 +260,8 @@ npm ci --ignore-scripts
 CT_RESET_LOCAL_FIXTURE=yes CT_RESET_CONSOLE_FIXTURE=yes npm run test:canonical
 
 # Local-only console, with TEST identities and non-live actions.
+# Startup preserves ct_console_dev. Reset is a separate confirmed command:
+# CT_RESET_CONSOLE_FIXTURE=yes npm run dev:console:reset
 npm run dev:console
 ```
 
