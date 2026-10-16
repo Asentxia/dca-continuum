@@ -22,10 +22,15 @@ after their actual execution and baseline inspection. Do not label absent scans 
 - A fail-closed CodeQL SARIF gate evaluates results generated on the verified merge
   candidate and blocks high/critical security results (CVSS >= 7), error-level
   findings, missing evidence, or failed extraction. Scan completion alone is not
-  interpreted as absence of vulnerabilities. Organization-managed default setup
-  rejects advanced SARIF uploads and cannot be changed at repository scope; it is
-  preserved. Custom security-extended analyses are evaluated locally and retained
-  as private artifacts, not falsely claimed as uploaded Security-tab alerts.
+  interpreted as absence of vulnerabilities. A dedicated enterprise-enforced
+  configuration (Continuum — advanced CodeQL, ID 284310) is attached only to
+  Asentxia/dca-continuum and enables default setup with advanced setup allowed.
+  Secret scanning, push protection, dependency graph, Dependabot alerts and
+  security updates remain enabled. Other repositories retain their configuration.
+  Custom security-extended analyses upload SARIF with job-scoped security-events
+  write permission and wait for processing; the local fail-closed policy and
+  private artifacts remain. Upload success must be verified in the actual run;
+  this setting change does not dismiss or waive existing scanner findings.
 - Checksum-pinned actionlint and zizmor workflow checks.
 - Pinned cargo-audit and weekly Rust dependency updates.
 - Security workflow runs on PR, merge group, main push, and weekly schedule.
