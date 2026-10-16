@@ -1,70 +1,60 @@
 #!/usr/bin/env python3
-"""Fail closed unless the tested ref has processed CodeQL evidence and no blockers."""
+"""Evaluate complete local CodeQL SARIF without overriding org-managed default setup."""
+from decimal import Decimal, InvalidOperation
+import glob
 import json
-import os
+from pathlib import Path
 import subprocess
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
+import sys
 
 
-def blocking(alert):
-    rule = alert.get("rule") or {}
-    return rule.get("security_severity_level") in {"high", "critical"} or rule.get("severity") == "error"
-
-
-def validate_analyses(items, expected_sha):
-    if not isinstance(items, list) or not items:
-        raise ValueError("No processed CodeQL analysis for the tested ref")
-    items = [item for item in items if item.get("commit_sha") == expected_sha]
-    expected = {"/language:javascript-typescript", "/language:python", "/language:actions"}
-    if not expected.issubset({item.get("category") for item in items}):
-        raise ValueError("Missing language evidence for the exact tested commit")
-    if any(item.get("error") for item in items):
-        raise ValueError("CodeQL analysis reported an error")
-
-
-def main():
-    repository = os.environ["GITHUB_REPOSITORY"]
-    if repository != "Asentxia/dca-continuum":
-        raise ValueError("Unexpected repository")
-    ref = os.environ["TESTED_REF"]
-    token = os.environ["GH_TOKEN"]
-
-    def get(kind, params):
-        url = f"https://api.github.com/repos/{repository}/code-scanning/{kind}?" + urllib.parse.urlencode(params)
-        request = urllib.request.Request(url, headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "continuum-codeql-gate",
-        })
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
-
-    for attempt in range(6):
-        try:
-            analyses = get("analyses", {"ref": ref, "tool_name": "CodeQL", "per_page": 100})
-            validate_analyses(analyses, subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
-            break
-        except (urllib.error.HTTPError, ValueError):
-            if attempt == 5:
-                raise
-            time.sleep(10)
+def evaluate(document):
+    if document.get("version") != "2.1.0" or not document.get("runs"):
+        raise ValueError("Missing or unsupported SARIF evidence")
     blockers = []
-    for page in range(1, 21):
-        alerts = get("alerts", {"ref": ref, "tool_name": "CodeQL", "state": "open", "per_page": 100, "page": page})
-        if not isinstance(alerts, list):
-            raise ValueError("Invalid alert result")
-        blockers.extend(item["number"] for item in alerts if blocking(item))
-        if len(alerts) < 100:
-            break
-    else:
-        raise ValueError("Alert pagination exceeded limit; cannot claim complete review")
-    print(json.dumps({"tested_ref": ref, "blocking_alert_numbers": blockers, "complete": True}))
+    for run in document["runs"]:
+        driver = run.get("tool", {}).get("driver", {})
+        if driver.get("name") != "CodeQL" or not isinstance(run.get("results"), list):
+            raise ValueError("Missing CodeQL result set")
+        for invocation in run.get("invocations", []):
+            if invocation.get("executionSuccessful") is False:
+                raise ValueError("CodeQL execution failed")
+            if any(n.get("level") == "error" for n in invocation.get("toolExecutionNotifications", [])):
+                raise ValueError("CodeQL reported an execution error")
+        rules = {rule["id"]: rule for rule in driver.get("rules", [])}
+        for result in run["results"]:
+            rule_id = result.get("ruleId")
+            if rule_id not in rules:
+                raise ValueError("Result references an unknown rule")
+            rule = rules[rule_id]
+            level = result.get("level", rule.get("defaultConfiguration", {}).get("level", "warning"))
+            severity = rule.get("properties", {}).get("security-severity")
+            high = False
+            if severity is not None:
+                try:
+                    numeric = Decimal(str(severity))
+                    if not numeric.is_finite() or not Decimal(0) <= numeric <= Decimal(10):
+                        raise ValueError("Invalid security severity")
+                    high = numeric >= Decimal(7)
+                except InvalidOperation as error:
+                    raise ValueError("Invalid security severity") from error
+            if high or level == "error":
+                # Do not automatically honor suppressions in untrusted source/SARIF.
+                blockers.append({"rule": rule_id, "level": level, "security_severity": severity})
+    return blockers
+
+
+def main(pattern):
+    files = sorted(glob.glob(pattern))
+    if not files:
+        raise ValueError("No CodeQL SARIF files; cannot claim a pass")
+    blockers = []
+    for filename in files:
+        blockers.extend(evaluate(json.loads(Path(filename).read_text())))
+    print(json.dumps({"tested_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                      "sarif_files": len(files), "blocking_findings": blockers, "complete": True}))
     return 1 if blockers else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1]))

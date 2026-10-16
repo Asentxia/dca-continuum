@@ -19,9 +19,13 @@ after their actual execution and baseline inspection. Do not label absent scans 
 - Full canonical verification and a success-only merge gate.
 - Canonical checkout is the GitHub PR merge candidate, not only PR head.
 - SHA-pinned CodeQL for JavaScript/TypeScript, Python, and Actions.
-- A fail-closed CodeQL alert gate checks processed results for the exact ref and
-  blocks open high/critical security alerts or error-level findings. Scan completion
-  alone is not interpreted as absence of vulnerabilities.
+- A fail-closed CodeQL SARIF gate evaluates results generated on the verified merge
+  candidate and blocks high/critical security results (CVSS >= 7), error-level
+  findings, missing evidence, or failed extraction. Scan completion alone is not
+  interpreted as absence of vulnerabilities. Organization-managed default setup
+  rejects advanced SARIF uploads and cannot be changed at repository scope; it is
+  preserved. Custom security-extended analyses are evaluated locally and retained
+  as private artifacts, not falsely claimed as uploaded Security-tab alerts.
 - Checksum-pinned actionlint and zizmor workflow checks.
 - Pinned cargo-audit and weekly Rust dependency updates.
 - Security workflow runs on PR, merge group, main push, and weekly schedule.
