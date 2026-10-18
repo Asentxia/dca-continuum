@@ -1151,7 +1151,12 @@ test('a terminal attempt closes its pending command', async () => {
     await assert.rejects(
       commands.execute(
         owner,
-        command('try_vera_text', id, { principal: vera, text: 'Stop' }, blocked),
+        command(
+          'try_vera_text',
+          id,
+          { principal: vera, text: 'Stop' },
+          blocked,
+        ),
       ),
     );
   } finally {
