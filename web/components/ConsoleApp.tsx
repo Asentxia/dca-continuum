@@ -34,6 +34,8 @@ import {
   TryVeraForm,
 } from './ModelConnectionPanel';
 import { WorkMap } from './WorkMap';
+import { WorkspaceNavigation, workspaceTitles } from './WorkspaceNavigation';
+import { WorkspaceGuide } from './WorkspaceGuide';
 
 function acceptedSessionKey(envelope: ClientEnvelope): string | null {
   const actor = envelope.session;
@@ -58,51 +60,18 @@ function acceptedSessionKey(envelope: ClientEnvelope): string | null {
     envelope.source_revision,
   ]);
 }
-const navGroups = [
-  {
-    label: 'Core work',
-    items: [
-      ['work', 'Work'],
-      ['projects', 'Projects'],
-      ['agents', 'Agents / VERA'],
-      ['approvals', 'Approvals'],
-      ['evidence', 'Evidence'],
-      ['recovery', 'Recovery'],
-    ],
-  },
-  {
-    label: 'Governance',
-    items: [
-      ['governance', 'Governance'],
-      ['authority', 'Authority'],
-      ['security', 'Security'],
-    ],
-  },
-  {
-    label: 'Workspace',
-    items: [
-      ['computers', 'Computers'],
-      ['context', 'State / Context'],
-      ['integrations', 'Integrations'],
-      ['incidents', 'Incidents'],
-      ['notifications', 'Notifications'],
-      ['usage', 'Usage / Limits'],
-      ['settings', 'Settings'],
-      ['setup', 'Onboarding / Setup'],
-    ],
-  },
-];
-const titles = Object.fromEntries(navGroups.flatMap((group) => group.items)),
+const titles = workspaceTitles,
   descriptions: Record<string, string> = {
-    work: 'Decisions, blockers and results—grounded in durable state.',
+    work: 'Your tasks, decisions and results. A clear next step, without losing the details.',
     approvals:
       'Review exact actions. Permission, execution and verification stay separate.',
     recovery:
       'Keep uncertainty visible. Observe before deciding; never resend blindly.',
     agents:
-      'Persistent accountable principals, independent of models and computers.',
-    projects:
-      'Organize durable work without changing its approval or authority.',
+      'Your AI teammates, with a lasting identity and permissions you control.',
+    projects: 'Keep related tasks together around one clear outcome.',
+    integrations:
+      'Models and account connections, with explicit limits and verification status.',
     computers:
       'Logical environments, observed placement and explicit recovery obligations.',
     governance:
@@ -742,32 +711,7 @@ export function ConsoleApp({
     const { csrf: _csrf, ...page } = data;
     workPage = page;
   }
-  const links = navGroups.map(({ label, items }) => (
-    <div className="nav-group" role="group" aria-label={label} key={label}>
-      <p className="nav-heading" aria-hidden>
-        {label}
-      </p>
-      {items.map(([id, title]) => (
-        <Link
-          key={id}
-          href={'/console/' + id}
-          aria-current={section === id ? 'page' : undefined}
-          className={section === id ? 'active' : ''}
-        >
-          <span className="nav-glyph" aria-hidden>
-            {id === 'work'
-              ? '◈'
-              : id === 'approvals'
-                ? '✓'
-                : id === 'agents'
-                  ? '◇'
-                  : '·'}
-          </span>
-          {title}
-        </Link>
-      ))}
-    </div>
-  ));
+  const links = <WorkspaceNavigation section={section} />;
   return (
     <div className="console" data-appearance={appearance}>
       <a href="#work-main" className="skip-link">
@@ -785,9 +729,9 @@ export function ConsoleApp({
         <nav>{links}</nav>
         <div className="sidebar-footer">
           <p className="small">
-            One authority home.
+            Your work stays yours.
             <br />
-            No blind retries.
+            Permissions stay explicit.
           </p>
           <span className="muted small">
             Development console · not production
@@ -936,6 +880,19 @@ export function ConsoleApp({
               )}
             </div>
           </div>
+          {!selected && !creating && (
+            <WorkspaceGuide
+              section={section}
+              canAct={allowed}
+              busy={busy}
+              onCreate={(action) => {
+                if (!allowed || busy) return;
+                setCreating(action);
+                setDetail(null);
+                frozen.current = true;
+              }}
+            />
+          )}
           <div className="toolbar">
             {section === 'work' && (
               <div className="view-switch" aria-label="Work view">

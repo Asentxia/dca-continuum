@@ -1129,3 +1129,169 @@ summary {
 .assignment select {
   margin-top: 8px;
 }
+
+/* Work-first layer: existing status/authority styles remain unchanged. */
+.advanced-navigation {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.advanced-navigation > summary {
+  min-height: 44px;
+  display: list-item;
+  padding: 12px 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.advanced-navigation[open] > summary {
+  color: var(--text);
+}
+.nav-explanation {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  padding: 0 10px;
+}
+.workspace-guide {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  margin: 0 0 24px;
+  padding: clamp(18px, 3vw, 28px);
+}
+.guide-introduction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.workspace-guide h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.25rem, 2vw, 1.625rem);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.workspace-guide p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 70ch;
+}
+.workspace-guide .eyebrow {
+  margin-bottom: 10px;
+  font-size: 0.6875rem;
+}
+.guide-introduction > button {
+  flex-shrink: 0;
+}
+.work-path {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 22px 0;
+  margin: 22px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  gap: 24px;
+}
+.work-path li {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+.path-number {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.work-path strong {
+  font-size: 0.875rem;
+}
+.work-path p {
+  font-size: 0.8125rem;
+  margin: 5px 0 8px;
+}
+.work-path a,
+.guide-text-link,
+.guide-follow-through a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-size: 0.8125rem;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.workspace-guide .guide-boundary {
+  font-size: 0.8125rem;
+  padding-top: 16px;
+  line-height: 1.65;
+}
+.workspace-guide .guide-availability {
+  font-size: 0.8125rem;
+  padding-top: 8px;
+}
+.guide-follow-through {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+.guide-follow-through > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.compact-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+@media (max-width: 760px) {
+  .guide-introduction,
+  .compact-guide {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .work-path {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .guide-introduction > button {
+    width: 100%;
+  }
+  .guide-follow-through {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-guide *,
+  .advanced-navigation * {
+    scroll-behavior: auto;
+  }
+}
+
+.work-path-guide {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.work-path-guide > summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 0.8125rem;
+}
+.work-path-guide .work-path {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 8px;
+}

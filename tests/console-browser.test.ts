@@ -72,7 +72,8 @@ async function go(section: string, selected?: string) {
       name:
         (
           {
-            agents: 'Agents / VERA',
+            agents: 'VERAs',
+            integrations: 'Connections',
             context: 'State / Context',
             usage: 'Usage / Limits',
             setup: 'Onboarding / Setup',
@@ -915,6 +916,41 @@ test('J read-only Work map uses the authorized filtered page, preserves UNKNOWN 
   );
 });
 test('A07/A08/A10/A14/A15/A19/A26/A33/A35/A37 every major read surface uses authenticated backend facts', async () => {
+  await go('work');
+  assert.equal(
+    await page.getByRole('list', { name: 'How to start working' }).isVisible(),
+    false,
+  );
+  await page
+    .getByText('New here? See the three-step setup', { exact: true })
+    .click();
+  assert.equal(
+    await page.getByRole('list', { name: 'How to start working' }).isVisible(),
+    true,
+  );
+  const advancedSummary = page.locator(
+    '.sidebar .advanced-navigation > summary',
+  );
+  await advancedSummary.focus();
+  await page.keyboard.press('Enter');
+  assert.equal(
+    await page
+      .locator('.sidebar .advanced-navigation')
+      .evaluate((el) => (el as HTMLDetailsElement).open),
+    true,
+  );
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('href')),
+    '/console/evidence',
+  );
+  assert.equal(
+    await page.locator('.sidebar [aria-label="Everyday work"] a').count(),
+    5,
+  );
+  await page.keyboard.press('Enter');
+  await page.getByRole('heading', { name: 'Evidence', exact: true }).waitFor();
+
   for (const section of [
     'projects',
     'governance',

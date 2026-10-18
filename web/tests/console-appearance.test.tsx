@@ -24,18 +24,18 @@ const storageKey = 'continuum.console.appearance';
 const destinations = [
   ['work', 'Work'],
   ['projects', 'Projects'],
-  ['agents', 'Agents / VERA'],
+  ['agents', 'VERAs'],
   ['approvals', 'Approvals'],
+  ['integrations', 'Connections'],
   ['evidence', 'Evidence'],
   ['recovery', 'Recovery'],
+  ['incidents', 'Incidents'],
+  ['notifications', 'Notifications'],
   ['governance', 'Governance'],
   ['authority', 'Authority'],
   ['security', 'Security'],
   ['computers', 'Computers'],
   ['context', 'State / Context'],
-  ['integrations', 'Integrations'],
-  ['incidents', 'Incidents'],
-  ['notifications', 'Notifications'],
   ['usage', 'Usage / Limits'],
   ['settings', 'Settings'],
   ['setup', 'Onboarding / Setup'],
@@ -288,6 +288,9 @@ describe('console-only appearance and navigation', () => {
     await renderConsole();
     const sidebar = screen.getByLabelText('Main navigation');
     const navigation = within(sidebar).getByRole('navigation');
+    await userEvent
+      .setup()
+      .click(within(navigation).getByText('More workspace tools'));
     expect(
       within(navigation)
         .getAllByRole('link')
@@ -298,15 +301,20 @@ describe('console-only appearance and navigation', () => {
         `${id === 'work' ? '◈' : id === 'approvals' ? '✓' : id === 'agents' ? '◇' : '·'}${title}`,
       ]),
     );
-    const core = within(navigation).getByRole('group', { name: 'Core work' });
+    const core = within(navigation).getByRole('group', {
+      name: 'Everyday work',
+    });
     expect(
       within(core)
         .getAllByRole('link')
         .map((link) => link.getAttribute('href')),
-    ).toEqual(destinations.slice(0, 6).map(([id]) => `/console/${id}`));
+    ).toEqual(destinations.slice(0, 5).map(([id]) => `/console/${id}`));
     const mobile = screen.getByText('Continuum navigation').closest('details')!;
     await userEvent.setup().click(screen.getByText('Continuum navigation'));
     expect(mobile.open).toBe(true);
+    await userEvent
+      .setup()
+      .click(within(mobile).getByText('More workspace tools'));
     for (const [id, title] of destinations) {
       expect(
         within(navigation)
