@@ -54,6 +54,24 @@ export async function lookupCommand(key: string) {
   }
 }
 
+export async function sealModelKey(
+  connectionId: string,
+  apiKey: string,
+  csrf: string,
+) {
+  const response = await fetch('/api/continuum/v1/model-credential', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-ct-csrf': csrf },
+    body: JSON.stringify({ connectionId, apiKey }),
+  });
+  if (response.status === 401) throw Error('SESSION_EXPIRED');
+  if (!response.ok) throw Error('CREDENTIAL_DENIED');
+  const body = await response.json();
+  if (body.sealed !== true || body.connection !== connectionId)
+    throw Error('CREDENTIAL_DENIED');
+  return body as { connection: string; sealed: true };
+}
+
 export async function command(value: HumanCommand, csrf: string) {
   try {
     const r = await fetch('/api/continuum/v1/command', {

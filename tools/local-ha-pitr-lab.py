@@ -1350,21 +1350,68 @@ if _fixture_os.environ.get('NODE_ENV') == 'production' or _fixture_os.environ.ge
 #!/usr/bin/env python3
 """Actual native PostgreSQL streaming/failover/WAL-PITR lab; NEVER accepts a remote endpoint."""
 from pathlib import Path
-import os,sys,json,subprocess,time,shutil
+import os,sys,json,subprocess,time,shutil,socket
 root=Path(__file__).resolve().parent.parent;os.chdir(root)
 base=root/'.local/dr-lab';out=root/'.artifacts/implementation/dr-lab';out.mkdir(parents=True,exist_ok=True)
 if os.environ.get('CT_LOCAL_DR_LAB')!='yes':raise SystemExit('Explicit local DR lab flag required')
 if base.exists():raise SystemExit('Lab directory already exists. Inspect/stop it before explicitly removing the disposable lab.')
 base.mkdir(parents=True,mode=0o700);archive=base/'wal';archive.mkdir(mode=0o700)
-log=open(out/'RAW-COMMANDS.log','w');started=[];results={"scope":"actual local native PostgreSQL; not cloud HA, regional DR or live identity/provider", "cases":[],"status":"FAIL"}
+log=open(out/'RAW-COMMANDS.log','w');started=[];held={};results={"scope":"actual local native PostgreSQL; not cloud HA, regional DR or live identity/provider", "cases":[],"status":"FAIL"}
 def cmd(args,env=None):
  log.write('$ '+' '.join(map(str,args))+'\n');log.flush();p=subprocess.run(list(map(str,args)),stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,env=env);log.write(p.stdout);log.flush()
  if p.returncode:raise RuntimeError(f'command failed ({p.returncode}): {args[0]}')
  return p.stdout.strip()
 def sql(port,query,db='ct_dr'):
  return cmd(['psql','-h','127.0.0.1','-p',port,'-U','localtest','-d',db,'-v','ON_ERROR_STOP=1','-Atc',query])
+def describe_port(port):
+ try:
+  with open('/proc/net/tcp') as handle: rows=handle.read().splitlines()[1:]
+ except OSError: return 'tcp owner unavailable'
+ inodes=[]
+ for row in rows:
+  parts=row.split()
+  if len(parts)<10: continue
+  local=parts[1]
+  if int(local.split(':')[1],16)!=port: continue
+  inodes.append((parts[3],parts[9]))
+ if not inodes: return 'no matching tcp inode; occupant not killed'
+ details=[]
+ for state,inode in inodes:
+  for pid in os.listdir('/proc'):
+   if not pid.isdigit(): continue
+   fd_dir='/proc/'+pid+'/fd'
+   try: fds=os.listdir(fd_dir)
+   except OSError: continue
+   for fd in fds:
+    try: target=os.readlink(fd_dir+'/'+fd)
+    except OSError: continue
+    if target!='socket:['+inode+']': continue
+    try:
+     with open('/proc/'+pid+'/cmdline','rb') as handle: text=handle.read().replace(b'\x00',b' ').decode(errors='replace')[:240]
+    except OSError: text='unreadable cmdline'
+    details.append('pid '+pid+' state '+state+' '+text)
+ return '\n'.join(details) or 'inode not mapped; occupant not killed'
+def claim(port):
+ last=None
+ for _ in range(40):
+  sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+  sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+  try:
+   sock.bind(('127.0.0.1',port));sock.listen(1);return sock
+  except OSError as error:
+   last=error;sock.close();time.sleep(.05)
+ raise RuntimeError(f'Lab port {port} is already in use ({last}). The occupant was not killed.\n{describe_port(port)}')
 def start(directory,port):
- sock=base/('socket-'+str(port));sock.mkdir(mode=0o700);cmd(['pg_ctl','-D',directory,'-l',directory/'server.log','-o',f'-p {port} -h 127.0.0.1 -k {sock}','-w','start']);started.append(directory)
+ reservation=held.pop(port,None)
+ if reservation is not None: reservation.close()
+ sock=base/('socket-'+str(port));sock.mkdir(mode=0o700)
+ try:cmd(['pg_ctl','-D',directory,'-l',directory/'server.log','-o',f'-p {port} -h 127.0.0.1 -k {sock}','-w','start'])
+ except Exception as error:
+  server_log=directory/'server.log'
+  detail=server_log.read_text(errors='replace') if server_log.exists() else 'server log was not created'
+  (out/f'server-{port}.log').write_text(detail)
+  raise RuntimeError(f'{error}\nPostgreSQL server log:\n{detail[-4000:]}') from error
+ started.append(directory)
 def stop(directory):
  cmd(['pg_ctl','-D',directory,'-m','immediate','-w','stop']);started.remove(directory)
 def probe(phase,port):
@@ -1376,9 +1423,10 @@ def until(fn,timeout=30):
   time.sleep(.15)
  raise RuntimeError('lab condition timeout')
 try:
+ for port in (55440,55441,55442): held[port]=claim(port)
  primary=base/'primary';cmd(['initdb','-D',primary,'-U','localtest','-A','trust','--encoding=UTF8','--locale=C'])
  archive_command=f"{sys.executable} {root/'tools'/'wal-archive.py'} %p {archive}/%f"
- with (primary/'postgresql.conf').open('a') as f:f.write(f"\nwal_level=replica\nmax_wal_senders=6\narchive_mode=on\narchive_timeout=1\narchive_command='{archive_command}'\nfsync=on\nsynchronous_commit=on\n")
+ with (primary/'postgresql.conf').open('a') as f:f.write(f"\nwal_level=replica\nmax_wal_senders=6\narchive_mode=on\narchive_timeout=1\narchive_command='{archive_command}'\nfsync=on\nsynchronous_commit=on\nshared_buffers=16MB\ndynamic_shared_memory_type=mmap\nmax_connections=20\n")
  with (primary/'pg_hba.conf').open('a') as f:f.write('\nhost replication localtest 127.0.0.1/32 trust\n')
  start(primary,55440);cmd(['createdb','-h','127.0.0.1','-p',55440,'-U','localtest','ct_dr'])
  for filename in ['001-foundation.sql','002-lock-privileges.sql','004-monotonic-fences.sql','005-identity-authority.sql','006-product-computers.sql','008-recovery-controls.sql','016-placement-generation.sql']:
@@ -1404,6 +1452,10 @@ try:
 except Exception as e:
  results['error']=str(e);raise
 finally:
+ for sock in list(held.values()):
+  try: sock.close()
+  except Exception as error: results.setdefault('cleanupErrors',[]).append(str(error))
+ held.clear()
  for directory in list(reversed(started)):
   try:stop(directory)
   except Exception as e:results.setdefault('cleanupErrors',[]).append(str(e))

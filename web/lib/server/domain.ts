@@ -6,6 +6,7 @@ export async function domain(path: string, init: RequestInit = {}) {
   if (
     !path.startsWith('/read?') &&
     path !== '/command' &&
+    path !== '/model-credential' &&
     !path.startsWith('/command?')
   )
     throw Error('Unreviewed API path');

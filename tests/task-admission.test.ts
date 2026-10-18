@@ -469,8 +469,9 @@ describe('task mandate admission', { concurrency: 1 }, () => {
         'Version two.',
         Number(locked.revision),
       );
+      const expectedFailure = assert.rejects(pending, /mandate is not current/);
       await holder.query('COMMIT');
-      await assert.rejects(pending, /mandate is not current/);
+      await expectedFailure;
       assert.equal(await tasks('direct-lock-task'), 0);
     } finally {
       await product.query('ROLLBACK').catch(() => undefined);

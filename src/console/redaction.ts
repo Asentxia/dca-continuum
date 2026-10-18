@@ -1,5 +1,5 @@
 const sensitive =
-  /(?:password|credential|secret|authorization|token|cookie|private.?key|^jwt$|^e2$|^receipt_?id$)/i;
+  /(?:password|credential|secret|authorization|token|cookie|private.?key|api[-_ ]?key|^jwt$|^e2$|^receipt_?id$)/i;
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 12) return '[Depth limit]';
   if (value === null || typeof value === 'boolean' || typeof value === 'number')
@@ -10,7 +10,8 @@ export function redact(value: unknown, depth = 0): unknown {
       /\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}\b/.test(
         value,
       ) ||
-      /(?:github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_]{16,}/.test(value)
+      /(?:github_pat_|ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_]{16,}/.test(value) ||
+      /AIza[0-9A-Za-z\-_]{20,}/.test(value)
     )
       return '[Sensitive value omitted]';
     return value.slice(0, 32768);

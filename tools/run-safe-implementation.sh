@@ -15,6 +15,31 @@ if [ -d .local/dr-lab ];then
  for d in primary standby restored;do if pg_ctl -D ".local/dr-lab/$d" status >/dev/null 2>&1;then pg_ctl -D ".local/dr-lab/$d" -m immediate stop;fi;done
  mv .local/dr-lab ".local/dr-lab-retained-$(date +%s)"
 fi
+# Keep 55440-55442 out of the ephemeral range for this run. Do not kill a foreign occupant.
+LAB_PORT_HOLDER=
+cleanup_lab_ports() {
+  if [ -n "${LAB_PORT_HOLDER:-}" ] && kill -0 "$LAB_PORT_HOLDER" 2>/dev/null; then
+    kill "$LAB_PORT_HOLDER" 2>/dev/null || true
+    wait "$LAB_PORT_HOLDER" 2>/dev/null || true
+  fi
+  LAB_PORT_HOLDER=
+}
+python3 tools/hold-lab-ports.py &
+LAB_PORT_HOLDER=$!
+trap cleanup_lab_ports EXIT
+ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  if python3 -c 'import socket
+s=socket.socket()
+try:
+ s.bind(("127.0.0.1",55440))
+except OSError:
+ raise SystemExit(0)
+s.close()
+raise SystemExit(1)'; then ready=1; break; fi
+  sleep 0.05
+done
+[ "$ready" = 1 ] || { echo 'Could not reserve lab ports 55440-55442. The occupant was not killed.'; exit 1; }
 npm ci --ignore-scripts > .artifacts/implementation/final/DEPENDENCIES.log 2>&1
 npm run build > .artifacts/implementation/final/BUILD.log 2>&1
 run(){ local name=$1;shift;printf 'Running %s\n' "$name"; local tap=".artifacts/implementation/final/$name.tap"; if ! node --test --test-reporter=tap --test-concurrency=1 "$@" > "$tap" 2>&1; then echo "Suite $name failed"; grep -n -A 35 '^not ok ' "$tap" || tail -n 80 "$tap"; mkdir -p .artifacts/canonical/final/baseline; cp "$tap" ".artifacts/canonical/final/baseline/$name.tap"; return 1; fi; }
@@ -59,6 +84,7 @@ run VERA-CONSOLE-COMMANDS dist/tests/vera-console-commands.test.js
 run CONSOLE-RESTART dist/tests/console-restart.test.js
 run CONSOLE-MIGRATION-GUARD dist/tests/console-migration-guard.test.js
 run CONSOLE-SETUP-RECOVERY dist/tests/console-setup-recovery.test.js
+run MODEL-CONNECTION dist/tests/model-connection.test.js
 run VERA-PROFILE-BACKUP dist/tests/vera-profile-backup.test.js
 run FONT-NOTICES dist/tests/font-notices.test.js
 run REVIEW-REMEDIATION dist/tests/review-remediation.test.js
@@ -67,6 +93,7 @@ run OBJECT-CONTAINMENT dist/tests/object-store-containment.test.js
 CT_FIXTURE_NODE="$(command -v node)" python3 tests/fixture-priv-bounds.py > .artifacts/implementation/final/FIXTURE-PRIV.json
 run COMPUTER-ISOLATION dist/tests/computer-isolation.test.js
 python3 tests/wal-archive-publish.py > .artifacts/implementation/final/WAL-ARCHIVE.json
+cleanup_lab_ports
 if ! CT_LOCAL_DR_LAB=yes python3 tools/local-ha-pitr-lab.py > .artifacts/implementation/final/HA-PITR-LAB.log 2>&1; then cat .artifacts/implementation/final/HA-PITR-LAB.log >&2; exit 1; fi
 psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/003-scheduler-fixture.sql > .artifacts/implementation/final/SCHEDULER-SCHEMA.log
 export CT_REFERENCE_DB_FILE="$PWD/.local/reference-temporal-final-$(date +%s).sqlite"

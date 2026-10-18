@@ -277,6 +277,67 @@ export class ConsoleReads {
             },
           ),
         ];
+        const connections = (
+          await c.query(
+            `SELECT c.id,c.name,c.status,c.model,c.verification_label,c.revision,c.supported_models,c.assigned_principal,
+                    l.max_requests,l.max_input_chars,l.max_output_chars,l.max_output_tokens,l.max_response_bytes,l.timeout_ms,
+                    l.max_requests-l.requests_reserved-l.requests_settled AS remaining_requests
+             FROM ct.model_connections c
+             LEFT JOIN ct.model_connection_limits l ON l.tenant=c.tenant AND l.connection_id=c.id
+             WHERE c.tenant=$1 ORDER BY c.id`,
+            [i.tenant],
+          )
+        ).rows;
+        for (const connection of connections)
+          records.push(
+            item(
+              connection.id,
+              'integration',
+              connection.name,
+              Number(connection.revision),
+              connection.status,
+              {
+                provider: 'gemini',
+                model: connection.model,
+                supportedModels: connection.supported_models ?? [],
+                assignedPrincipal: connection.assigned_principal,
+                verification: connection.verification_label,
+                remainingRequests:
+                  connection.remaining_requests == null
+                    ? null
+                    : Number(connection.remaining_requests),
+                maxRequests:
+                  connection.max_requests == null
+                    ? null
+                    : Number(connection.max_requests),
+                maxInputChars:
+                  connection.max_input_chars == null
+                    ? null
+                    : Number(connection.max_input_chars),
+                maxOutputChars:
+                  connection.max_output_chars == null
+                    ? null
+                    : Number(connection.max_output_chars),
+                maxOutputTokens:
+                  connection.max_output_tokens == null
+                    ? null
+                    : Number(connection.max_output_tokens),
+                maxResponseBytes:
+                  connection.max_response_bytes == null
+                    ? null
+                    : Number(connection.max_response_bytes),
+                timeoutMs:
+                  connection.timeout_ms == null
+                    ? null
+                    : Number(connection.timeout_ms),
+                liveVerified: false,
+                spendingCap:
+                  'Not a spending cap. Limits count requests and text size only.',
+                costWarning:
+                  'Provider usage may cost money. Disconnect blocks new requests; a request already sent may still finish or be charged.',
+              },
+            ),
+          );
       } else if (section === 'setup') {
         const principals = Number(
             (
@@ -450,7 +511,7 @@ export class ConsoleReads {
     else if (section === 'governance')
       sql = `SELECT o.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',r.id,'name',r.name,'revision',r.revision) ORDER BY r.id) FROM ct.role_definitions r WHERE r.tenant=o.tenant AND r.organization=o.id),'[]') roles,COALESCE((SELECT jsonb_agg(jsonb_build_object('subjectKind',m.subject_kind,'subjectId',m.subject_id,'roleId',m.role_id,'ownerSeat',m.owner_seat,'revision',m.revision) ORDER BY m.subject_kind,m.subject_id) FROM ct.memberships m WHERE m.tenant=o.tenant AND m.organization=o.id),'[]') memberships,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',d.id,'revision',d.revision,'version',d.current_version,'title',v.title,'body',v.body) ORDER BY d.id) FROM ct.mandates d JOIN ct.mandate_versions v ON v.tenant=d.tenant AND v.organization=d.organization AND v.mandate=d.id AND v.version=d.current_version WHERE d.tenant=o.tenant AND d.organization=o.id),'[]') mandates FROM ct.organizations o WHERE o.tenant=$1`;
     else if (section === 'agents')
-      sql = `SELECT p.*,v.name AS profile_name,v.description AS profile_description,v.revision AS profile_revision,v.created_by AS profile_created_by,c.id AS computer_id,c.generation AS computer_generation,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'kind',i.kind,'active',i.active,'version',i.version)) FROM ct.identities i WHERE i.tenant=p.tenant AND i.principal=p.id),'[]') workload_identities,(SELECT to_jsonb(b) FROM ct.cognition_bindings b WHERE b.tenant=p.tenant AND b.principal=p.id ORDER BY b.revision DESC LIMIT 1) cognition FROM ct.principals p LEFT JOIN ct.vera_profiles v ON v.tenant=p.tenant AND v.id=p.id LEFT JOIN ct.computers c ON c.tenant=p.tenant AND c.principal=p.id WHERE p.tenant=$1`;
+      sql = `SELECT p.*,v.name AS profile_name,v.description AS profile_description,v.revision AS profile_revision,v.created_by AS profile_created_by,c.id AS computer_id,c.generation AS computer_generation,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'kind',i.kind,'active',i.active,'version',i.version)) FROM ct.identities i WHERE i.tenant=p.tenant AND i.principal=p.id),'[]') workload_identities,(SELECT to_jsonb(b) FROM ct.cognition_bindings b WHERE b.tenant=p.tenant AND b.principal=p.id ORDER BY b.revision DESC LIMIT 1) cognition,(SELECT to_jsonb(mc) FROM (SELECT c.id,c.name,c.status,c.model,c.verification_label,(SELECT l.max_requests-l.requests_reserved-l.requests_settled FROM ct.model_connection_limits l WHERE l.tenant=c.tenant AND l.connection_id=c.id) remaining_requests FROM ct.model_connections c WHERE c.tenant=p.tenant AND c.assigned_principal=p.id AND c.status<>'REVOKED' ORDER BY c.revision DESC LIMIT 1) mc) model_connection FROM ct.principals p LEFT JOIN ct.vera_profiles v ON v.tenant=p.tenant AND v.id=p.id LEFT JOIN ct.computers c ON c.tenant=p.tenant AND c.principal=p.id WHERE p.tenant=$1`;
     else if (section === 'computers')
       sql = `SELECT x.*,v.raw_state,v.provider_class,v.health,v.qualification_scope,v.observed_at,v.fresh_until,v.checkpoint_status,p.execution_mode FROM ct.computers x JOIN ct.principals p ON p.tenant=x.tenant AND p.id=x.principal LEFT JOIN ct.computer_observations v ON v.tenant=x.tenant AND v.computer=x.id AND v.generation=x.generation WHERE x.tenant=$1`;
     else if (['approvals', 'recovery', 'operation'].includes(section))
@@ -604,6 +665,14 @@ export class ConsoleReads {
           cognition: x.cognition
             ? redact(x.cognition)
             : 'Model binding not configured',
+          modelConnection: x.model_connection
+            ? {
+                ...(redact(x.model_connection) as Record<string, unknown>),
+                spendingCap:
+                  'Not a spending cap. Limits count requests and text size only.',
+                liveVerified: false,
+              }
+            : null,
           humanAccount: 'Separate enrolled human; not this principal',
           continuity:
             'Logical principal survives model/session/placement replacement',

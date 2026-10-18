@@ -75,6 +75,33 @@ export async function POST(
 ) {
   try {
     const { path } = await context.params;
+    if (path.join('/') === 'model-credential') {
+      const session = await serverSession();
+      if (!session) return reply({ error: 'Sign-in required' }, 401);
+      validateOrigin(request.headers.get('origin'));
+      validateCsrf(request.headers.get('x-ct-csrf'), session.key);
+      if (request.headers.get('content-type') !== 'application/json')
+        return reply({ error: 'JSON required' }, 422);
+      const input = (await boundedJson(request, 4096)) as {
+        connectionId?: unknown;
+        apiKey?: unknown;
+      };
+      if (
+        !input ||
+        typeof input.connectionId !== 'string' ||
+        typeof input.apiKey !== 'string'
+      )
+        return reply({ error: 'Invalid credential request' }, 422);
+      const { response } = await domain('/model-credential', {
+        method: 'POST',
+        body: JSON.stringify({
+          connectionId: input.connectionId,
+          apiKey: input.apiKey,
+        }),
+      });
+      const data = await response.json();
+      return reply(data, response.status);
+    }
     if (path.join('/') !== 'command')
       return reply(
         { error: 'Unavailable; no browser dispatch, reconcile or renew' },
