@@ -9,11 +9,14 @@ export type GeminiTextResult = Readonly<{
 
 export interface GeminiTransport {
   listModels(apiKey: string): Promise<GeminiModel[]>;
+  readonly mock?: boolean;
   generate(input: {
     apiKey: string;
     model: string;
     text: string;
     timeoutMs: number;
+    maxOutputTokens: number;
+    maxResponseBytes: number;
   }): Promise<GeminiTextResult>;
 }
 
@@ -23,6 +26,7 @@ type FetchLike = (
 ) => Promise<{
   status: number;
   json: () => Promise<unknown>;
+  arrayBuffer?: () => Promise<ArrayBuffer>;
 }>;
 
 export function geminiUrl(path: string) {
@@ -124,6 +128,7 @@ export function liveGeminiTransport(
     path: string,
     apiKey: string,
     timeoutMs: number,
+    maxResponseBytes: number,
     body?: unknown,
   ) {
     const response = await fetchImpl(geminiUrl(path), {
@@ -145,20 +150,35 @@ export function liveGeminiTransport(
     if (response.status === 429) throw Error('gemini rate limited');
     if (response.status < 200 || response.status >= 300)
       throw Error('gemini provider error');
-    return response.json();
+    const bytes = response.arrayBuffer
+      ? await response.arrayBuffer()
+      : new TextEncoder().encode(JSON.stringify(await response.json()));
+    if (bytes.byteLength > maxResponseBytes)
+      throw Error('gemini response too large');
+    return JSON.parse(new TextDecoder().decode(bytes));
   }
   return {
+    mock: false,
     async listModels(apiKey) {
-      return modelsFromList(await call('/v1beta/models', apiKey, 5000));
+      return modelsFromList(await call('/v1beta/models', apiKey, 5000, 16384));
     },
     async generate(input) {
       if (!modelName(input.model)) throw Error('gemini model rejected');
+      if (
+        !Number.isSafeInteger(input.maxOutputTokens) ||
+        input.maxOutputTokens < 1
+      )
+        throw Error('gemini generation limit unavailable');
       return textFromGenerate(
         await call(
           `/v1beta/${input.model}:generateContent`,
           input.apiKey,
           input.timeoutMs,
-          { contents: [{ role: 'user', parts: [{ text: input.text }] }] },
+          input.maxResponseBytes,
+          {
+            contents: [{ role: 'user', parts: [{ text: input.text }] }],
+            generationConfig: { maxOutputTokens: input.maxOutputTokens },
+          },
         ),
       );
     },
@@ -167,6 +187,7 @@ export function liveGeminiTransport(
 
 export function disabledGeminiTransport(): GeminiTransport {
   return {
+    mock: false,
     listModels() {
       return Promise.reject(Error('gemini live calls disabled'));
     },
@@ -174,4 +195,13 @@ export function disabledGeminiTransport(): GeminiTransport {
       return Promise.reject(Error('gemini live calls disabled'));
     },
   };
+}
+
+export function runtimeGeminiTransport(
+  env: Record<string, string | undefined> = process.env,
+): GeminiTransport {
+  if (env.CT_MODEL_TRANSPORT === 'mock')
+    throw Error('mock transport cannot be selected by environment');
+  if (env.CT_ENABLE_GEMINI === 'yes') return liveGeminiTransport();
+  return disabledGeminiTransport();
 }

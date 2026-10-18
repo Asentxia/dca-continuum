@@ -239,6 +239,8 @@ export const CommandInputs = {
       maxOutputChars: z.number().int().min(1).max(4000),
       maxConcurrent: z.literal(1),
       timeoutMs: z.number().int().min(1000).max(10000),
+      maxOutputTokens: z.number().int().min(1).max(256),
+      maxResponseBytes: z.number().int().min(256).max(16384),
     })
     .strict(),
   test_model_connection: z.object({}).strict(),

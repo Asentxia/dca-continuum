@@ -27,6 +27,7 @@ let commands: ConsoleCommands;
 let calls = 0;
 
 class MockGemini implements GeminiTransport {
+  readonly mock = true;
   mode:
     | 'ok'
     | 'invalid'
@@ -55,7 +56,11 @@ class MockGemini implements GeminiTransport {
     model: string;
     text: string;
     timeoutMs: number;
+    maxOutputTokens: number;
+    maxResponseBytes: number;
   }) {
+    assert.ok(input.maxOutputTokens >= 1);
+    assert.ok(input.maxResponseBytes >= 256);
     calls += 1;
     assert.equal(input.apiKey, key);
     assert.equal(input.model, 'models/mock-text');
@@ -298,6 +303,8 @@ test('mock tests stay pending and enforce text limits without a spending cap', a
       maxRequests: 10,
       maxInputChars: 1000,
       maxOutputChars: 1000,
+      maxOutputTokens: 64,
+      maxResponseBytes: 4096,
       maxConcurrent: 1,
       timeoutMs: 2000,
     }),
@@ -403,8 +410,8 @@ test('disconnect blocks a reserved request and a later one', async () => {
     [id],
   );
   await admin.query(
-    `INSERT INTO ct.model_text_attempts(tenant,id,connection_id,principal,idempotency_key,state,input_chars)
-     VALUES('a',$2,$1,'agent',$2,'RESERVED',4)`,
+    `INSERT INTO ct.model_text_attempts(tenant,id,connection_id,principal,idempotency_key,state,input_chars,dispatch)
+     VALUES('a',$2,$1,'agent',$2,'RESERVED',4,'text')`,
     [id, 'queued-' + randomBytes(4).toString('hex')],
   );
   await commands.execute(owner, command('revoke_model_connection', id, {}));
@@ -421,6 +428,43 @@ test('disconnect blocks a reserved request and a later one', async () => {
     )
   ).rows;
   assert.equal(row.length, 1);
+});
+
+test('missing and wrong encryption keys fail without revealing the provider key', async () => {
+  const saved = process.env.CT_MODEL_CREDENTIAL_KEK;
+  const owner = await f.actor('user');
+  const id = prefix + '-keycheck';
+  await commands.execute(
+    owner,
+    command('create_model_connection', id, { name: 'Key check' }),
+  );
+  delete process.env.CT_MODEL_CREDENTIAL_KEK;
+  await assert.rejects(
+    commands.sealModelCredential(owner, id, key),
+    /model credential key unavailable/,
+  );
+  process.env.CT_MODEL_CREDENTIAL_KEK = Buffer.alloc(32, 9).toString('base64');
+  await commands.sealModelCredential(owner, id, key);
+  process.env.CT_MODEL_CREDENTIAL_KEK = Buffer.alloc(32, 4).toString('base64');
+  await commands.execute(
+    owner,
+    command('set_model_connection_limits', id, {
+      maxRequests: 2,
+      maxInputChars: 100,
+      maxOutputChars: 100,
+      maxOutputTokens: 16,
+      maxResponseBytes: 1024,
+      maxConcurrent: 1,
+      timeoutMs: 1000,
+    }),
+  );
+  const tested = await commands.execute(
+    owner,
+    command('test_model_connection', id, {}),
+  );
+  assert.equal(JSON.stringify(tested).includes(key), false);
+  assert.notEqual((tested.result as { outcome?: string }).outcome, 'LISTED');
+  process.env.CT_MODEL_CREDENTIAL_KEK = saved;
 });
 
 test('provider output is rendered as text', async () => {

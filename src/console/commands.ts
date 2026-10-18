@@ -19,7 +19,10 @@ import { WorkCoordination } from './coordination.js';
 import { VeraService } from '../regency/vera-service.js';
 import { ModelConnectionService } from '../model-connection-service.js';
 import { rejectSecretFields } from '../model-credential.js';
-import type { GeminiTransport } from '../gemini-text.js';
+import {
+  runtimeGeminiTransport,
+  type GeminiTransport,
+} from '../gemini-text.js';
 export class ConsoleCommands {
   constructor(
     private db: pg.Pool,
@@ -31,7 +34,7 @@ export class ConsoleCommands {
     private mandates = new MandateService(),
     private coordination = new WorkCoordination(db, fence),
     private veras = new VeraService(db, fence),
-    private models = new ModelConnectionService(),
+    private models = new ModelConnectionService(runtimeGeminiTransport()),
   ) {
     if (this.mode === 'LOCAL_FIXTURE')
       assertLocalFixtures('local console commands profile');
@@ -61,7 +64,7 @@ export class ConsoleCommands {
     }
     if (this.mode !== 'LOCAL_FIXTURE')
       throw Error('live commands qualification pending');
-    return tx(this.db, async (c) => {
+    const outcome = await tx(this.db, async (c) => {
       await activeControl(c, this.fence);
       const i = await enrolled(c, actor, true);
       await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
@@ -78,6 +81,28 @@ export class ConsoleCommands {
         if (previous.body_digest !== digest)
           throw Error('command binding conflict');
         await enrolled(c, actor, true);
+        if (previous.status === 'PENDING') {
+          const attempt = (
+            await c.query(
+              'SELECT id, state FROM ct.model_text_attempts WHERE tenant=$1 AND idempotency_key=$2',
+              [i.tenant, cmd.idempotency_key],
+            )
+          ).rows[0];
+          if (attempt?.state === 'RESERVED')
+            return {
+              __dispatch: true,
+              attempt: attempt.id,
+              tenant: i.tenant,
+              commandId: previous.id,
+            };
+          if (attempt?.state === 'SENDING')
+            return {
+              __recover: true,
+              attempt: attempt.id,
+              tenant: i.tenant,
+              commandId: previous.id,
+            };
+        }
         return receipt(previous, true);
       }
       const id = randomUUID();
@@ -102,6 +127,8 @@ export class ConsoleCommands {
         result = await this.apply(c, actor, i.tenant, cmd, body);
         await enrolled(c, actor, true);
         await c.query('RELEASE SAVEPOINT reviewed_domain_command');
+        if (result && (result as { phase?: string }).phase === 'RESERVED')
+          status = 'PENDING';
       } catch {
         await c.query('ROLLBACK TO SAVEPOINT reviewed_domain_command');
         status = 'DENIED';
@@ -111,6 +138,16 @@ export class ConsoleCommands {
             'Current binding, version, eligibility or scope denied. No external action was requested by this command.',
         };
       }
+      if (
+        status === 'PENDING' &&
+        (result as { phase?: string })?.phase === 'RESERVED'
+      )
+        return {
+          __dispatch: true,
+          attempt: (result as { attempt: string }).attempt,
+          tenant: i.tenant,
+          commandId: id,
+        };
       const row = (
         await c.query(
           'UPDATE ct.console_commands SET status=$4,result=$5,error_code=$6 WHERE tenant=$1 AND actor=$2 AND id=$3 RETURNING *',
@@ -126,6 +163,90 @@ export class ConsoleCommands {
         externalEffect: false,
       });
       return receipt(row, false);
+    });
+    if (outcome && (outcome as { __dispatch?: boolean }).__dispatch)
+      return this.dispatchAfterCommit(
+        actor,
+        cmd,
+        body,
+        outcome as { attempt: string; tenant: string; commandId: string },
+      );
+    if (outcome && (outcome as { __recover?: boolean }).__recover)
+      return this.recoverSending(
+        outcome as { attempt: string; tenant: string; commandId: string },
+      );
+    return outcome as ReturnType<typeof receipt>;
+  }
+  private async dispatchAfterCommit(
+    actor: VerifiedIdentity,
+    cmd: HumanCommand,
+    body: { text?: string },
+    reserved: { attempt: string; tenant: string; commandId: string },
+  ) {
+    const admitted = await tx(this.db, (c) =>
+      this.models.admit(c, reserved.tenant, reserved.attempt),
+    );
+    if (!admitted.send) {
+      return tx(this.db, async (c) => {
+        const row = (
+          await c.query(
+            `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
+            [
+              reserved.tenant,
+              reserved.commandId,
+              JSON.stringify(admitted.result),
+            ],
+          )
+        ).rows[0];
+        return receipt(row, false);
+      });
+    }
+    const provider = await this.models.invoke(admitted, body.text ?? '');
+    return tx(this.db, async (c) => {
+      const result = await this.models.record(
+        c,
+        reserved.tenant,
+        reserved.attempt,
+        provider,
+        {
+          maxOutputChars: admitted.maxOutputChars,
+          connectionId: admitted.connectionId,
+        },
+      );
+      const row = (
+        await c.query(
+          `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
+          [reserved.tenant, reserved.commandId, JSON.stringify(result)],
+        )
+      ).rows[0];
+      await append(c, reserved.tenant, 'HUMAN_COMMAND_APPLIED', {
+        command: reserved.commandId,
+        kind: cmd.kind,
+        target: cmd.target,
+        externalEffect: false,
+      });
+      void actor;
+      return receipt(row, false);
+    });
+  }
+  private async recoverSending(reserved: {
+    attempt: string;
+    tenant: string;
+    commandId: string;
+  }) {
+    return tx(this.db, async (c) => {
+      const result = await this.models.recover(
+        c,
+        reserved.tenant,
+        reserved.attempt,
+      );
+      const row = (
+        await c.query(
+          `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
+          [reserved.tenant, reserved.commandId, JSON.stringify(result)],
+        )
+      ).rows[0];
+      return receipt(row, true);
     });
   }
   async lookup(actor: VerifiedIdentity, key: string) {
@@ -180,15 +301,15 @@ export class ConsoleCommands {
       case 'set_model_connection_limits':
         return this.models.setLimits(c, a, cmd.target, b);
       case 'test_model_connection':
-        return this.models.test(c, a, cmd.target);
+        return this.models.test(c, a, cmd.target, cmd.idempotency_key);
       case 'select_model_connection_model':
         return this.models.selectModel(c, a, cmd.target, b.model);
       case 'assign_model_connection':
         return this.models.assign(c, a, cmd.target, b.principal);
       case 'revoke_model_connection':
         return this.models.revoke(c, a, cmd.target);
-      case 'try_vera_text': {
-        const reserved = await this.models.reserveText(
+      case 'try_vera_text':
+        return this.models.reserveText(
           c,
           a,
           cmd.target,
@@ -196,16 +317,6 @@ export class ConsoleCommands {
           b.text,
           cmd.idempotency_key,
         );
-        return this.models.sendText(
-          c,
-          (await enrolled(c, a, true)).tenant,
-          cmd.target,
-          reserved.attempt,
-          reserved.model,
-          b.text,
-          reserved.timeoutMs,
-        );
-      }
       case 'create_vera': {
         if (cmd.expected_version !== 0) throw Error('new VERA profile version');
         const result = await this.veras.create(a, { id: cmd.target, ...b }, c);

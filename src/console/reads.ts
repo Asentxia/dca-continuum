@@ -279,8 +279,12 @@ export class ConsoleReads {
         ];
         const connections = (
           await c.query(
-            `SELECT id,name,status,model,verification_label,revision
-             FROM ct.model_connections WHERE tenant=$1 ORDER BY id`,
+            `SELECT c.id,c.name,c.status,c.model,c.verification_label,c.revision,c.supported_models,c.assigned_principal,
+                    l.max_requests,l.max_input_chars,l.max_output_chars,l.max_output_tokens,l.max_response_bytes,l.timeout_ms,
+                    l.max_requests-l.requests_reserved-l.requests_settled AS remaining_requests
+             FROM ct.model_connections c
+             LEFT JOIN ct.model_connection_limits l ON l.tenant=c.tenant AND l.connection_id=c.id
+             WHERE c.tenant=$1 ORDER BY c.id`,
             [i.tenant],
           )
         ).rows;
@@ -295,7 +299,37 @@ export class ConsoleReads {
               {
                 provider: 'gemini',
                 model: connection.model,
+                supportedModels: connection.supported_models ?? [],
+                assignedPrincipal: connection.assigned_principal,
                 verification: connection.verification_label,
+                remainingRequests:
+                  connection.remaining_requests == null
+                    ? null
+                    : Number(connection.remaining_requests),
+                maxRequests:
+                  connection.max_requests == null
+                    ? null
+                    : Number(connection.max_requests),
+                maxInputChars:
+                  connection.max_input_chars == null
+                    ? null
+                    : Number(connection.max_input_chars),
+                maxOutputChars:
+                  connection.max_output_chars == null
+                    ? null
+                    : Number(connection.max_output_chars),
+                maxOutputTokens:
+                  connection.max_output_tokens == null
+                    ? null
+                    : Number(connection.max_output_tokens),
+                maxResponseBytes:
+                  connection.max_response_bytes == null
+                    ? null
+                    : Number(connection.max_response_bytes),
+                timeoutMs:
+                  connection.timeout_ms == null
+                    ? null
+                    : Number(connection.timeout_ms),
                 liveVerified: false,
                 spendingCap:
                   'Not a spending cap. Limits count requests and text size only.',

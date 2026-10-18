@@ -10,12 +10,14 @@ import {
   type GeminiTransport,
 } from './gemini-text.js';
 
+const NOT_VERIFIED = 'not verified';
 const denied = {
   externalEffect: false,
   effectAuthority: false,
   workflowAdmitted: false,
   spendingCap: false,
-  verification: VERIFICATION_LABEL,
+  verification: NOT_VERIFIED,
+  liveVerified: false,
 };
 
 export class ModelConnectionService {
@@ -86,6 +88,8 @@ export class ModelConnectionService {
       maxOutputChars: number;
       maxConcurrent: number;
       timeoutMs: number;
+      maxOutputTokens: number;
+      maxResponseBytes: number;
     },
   ) {
     const i = await enrolled(c, actor, true);
@@ -97,18 +101,22 @@ export class ModelConnectionService {
       limits.maxOutputChars,
       limits.maxConcurrent,
       limits.timeoutMs,
+      limits.maxOutputTokens,
+      limits.maxResponseBytes,
     ];
     if (bounds.some((n) => !Number.isSafeInteger(n)))
       throw Error('connection limits');
     await c.query(
-      `INSERT INTO ct.model_connection_limits(tenant,connection_id,max_requests,max_input_chars,max_output_chars,max_concurrent,timeout_ms)
-       VALUES($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO ct.model_connection_limits(tenant,connection_id,max_requests,max_input_chars,max_output_chars,max_concurrent,timeout_ms,max_output_tokens,max_response_bytes)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (tenant, connection_id) DO UPDATE SET
          max_requests=EXCLUDED.max_requests,
          max_input_chars=EXCLUDED.max_input_chars,
          max_output_chars=EXCLUDED.max_output_chars,
          max_concurrent=EXCLUDED.max_concurrent,
-         timeout_ms=EXCLUDED.timeout_ms
+         timeout_ms=EXCLUDED.timeout_ms,
+         max_output_tokens=EXCLUDED.max_output_tokens,
+         max_response_bytes=EXCLUDED.max_response_bytes
        WHERE ct.model_connection_limits.requests_reserved=0
          AND ct.model_connection_limits.requests_settled=0
          AND ct.model_connection_limits.concurrent_requests=0`,
@@ -120,6 +128,8 @@ export class ModelConnectionService {
         limits.maxOutputChars,
         limits.maxConcurrent,
         limits.timeoutMs,
+        limits.maxOutputTokens,
+        limits.maxResponseBytes,
       ],
     );
     await this.bump(c, i.tenant, connectionId);
@@ -130,9 +140,17 @@ export class ModelConnectionService {
       spendingCap: false,
     };
   }
-  async test(c: pg.PoolClient, actor: VerifiedIdentity, connectionId: string) {
+  async test(
+    c: pg.PoolClient,
+    actor: VerifiedIdentity,
+    connectionId: string,
+    idempotencyKey: string,
+  ) {
     const i = await enrolled(c, actor, true);
     await this.locked(c, i.tenant, connectionId);
+    const limits = await this.limits(c, i.tenant, connectionId);
+    if (!Number(limits.max_output_tokens) || !Number(limits.max_response_bytes))
+      throw Error('connection limits unavailable');
     const principal = (
       await c.query(
         'SELECT id FROM ct.principals WHERE tenant=$1 ORDER BY id LIMIT 1',
@@ -147,42 +165,14 @@ export class ModelConnectionService {
       principal.id,
       0,
       0,
+      idempotencyKey,
+      'list',
     );
-    let outcome = 'PROVIDER_ERROR';
-    try {
-      const apiKey = await this.key(c, i.tenant, connectionId);
-      const models = await this.transport.listModels(apiKey);
-      await c.query(
-        `UPDATE ct.model_connections
-         SET supported_models=$3, verification_label=$4, revision=revision+1
-         WHERE tenant=$1 AND id=$2`,
-        [
-          i.tenant,
-          connectionId,
-          models.map((model) => model.name),
-          VERIFICATION_LABEL,
-        ],
-      );
-      outcome = 'MOCK_OR_UNVERIFIED_LIST';
-      await this.finish(c, i.tenant, attempt, 'SETTLED', outcome, null, true);
-    } catch (error) {
-      outcome = this.outcome(error);
-      await this.finish(
-        c,
-        i.tenant,
-        attempt,
-        outcome === 'TIMEOUT' ? 'UNCERTAIN' : 'SETTLED',
-        outcome,
-        null,
-        false,
-      );
-    }
     return {
-      ...denied,
+      phase: 'RESERVED' as const,
+      attempt,
+      dispatch: 'list' as const,
       connection: connectionId,
-      outcome,
-      providerAction: true,
-      liveVerified: false,
     };
   }
   async selectModel(
@@ -308,92 +298,276 @@ export class ModelConnectionService {
       idempotencyKey,
     );
     return {
+      phase: 'RESERVED' as const,
       attempt,
-      model: row.model as string,
-      timeoutMs: Number(limits.timeout_ms),
+      dispatch: 'text' as const,
+      connection: connectionId,
     };
   }
-  async sendText(
-    c: pg.PoolClient,
-    tenant: string,
-    connectionId: string,
-    attempt: string,
-    model: string,
-    text: string,
-    timeoutMs: number,
-  ) {
-    const current = await this.locked(c, tenant, connectionId);
-    if (current.status !== 'SEALED') {
-      await this.finish(c, tenant, attempt, 'BLOCKED', 'REVOKED', null, false);
+  async admit(c: pg.PoolClient, tenant: string, attemptId: string) {
+    const attempt = (
+      await c.query(
+        'SELECT * FROM ct.model_text_attempts WHERE tenant=$1 AND id=$2 FOR UPDATE',
+        [tenant, attemptId],
+      )
+    ).rows[0];
+    if (!attempt) throw Error('attempt scope');
+    if (attempt.state !== 'RESERVED')
       return {
-        ...denied,
-        outcome: 'REVOKED',
-        sent: false,
-        sentRequestsMayComplete: false,
+        send: false as const,
+        result: this.stored(attempt),
+      };
+    const connection = await this.locked(c, tenant, attempt.connection_id);
+    if (
+      connection.status !== 'SEALED' ||
+      (!this.transport.mock && process.env.CT_ENABLE_GEMINI !== 'yes')
+    ) {
+      const outcome =
+        connection.status !== 'SEALED' ? 'REVOKED' : 'LIVE_DISABLED';
+      await this.finish(c, tenant, attemptId, 'BLOCKED', outcome, null, false);
+      return {
+        send: false as const,
+        result: {
+          ...denied,
+          outcome,
+          sent: false,
+          providerAction: false,
+          message:
+            outcome === 'LIVE_DISABLED'
+              ? 'Live Gemini calls are disabled. This did not verify the key or connection.'
+              : 'The connection is revoked. This request was not sent.',
+        },
       };
     }
-    await c.query(
-      `UPDATE ct.model_text_attempts SET state='SENT' WHERE tenant=$1 AND id=$2 AND state='RESERVED'`,
-      [tenant, attempt],
-    );
+    const limits = await this.limits(c, tenant, attempt.connection_id);
+    if (!Number(limits.max_output_tokens) || !Number(limits.max_response_bytes))
+      throw Error('connection limits unavailable');
+    let apiKey: string;
     try {
-      const apiKey = await this.key(c, tenant, connectionId);
-      const generated = await this.transport.generate({
-        apiKey,
-        model,
-        text,
-        timeoutMs,
-      });
-      const limits = await this.limits(c, tenant, connectionId);
-      if (generated.text.length > Number(limits.max_output_chars)) {
-        await this.finish(
-          c,
-          tenant,
-          attempt,
-          'SETTLED',
-          'OUTPUT_LIMIT',
-          null,
-          true,
-        );
-        return { ...denied, outcome: 'OUTPUT_LIMIT', sent: true };
-      }
-      const state = generated.usageReported ? 'SETTLED' : 'UNCERTAIN';
+      apiKey = await this.key(c, tenant, attempt.connection_id);
+    } catch {
       await this.finish(
         c,
         tenant,
-        attempt,
-        state,
-        generated.usageReported ? 'TEXT' : 'UNCERTAIN',
-        generated.text,
-        generated.usageReported,
+        attemptId,
+        'BLOCKED',
+        'KEY_UNAVAILABLE',
+        null,
+        false,
       );
       return {
-        ...denied,
-        outcome: state,
+        send: false as const,
+        result: {
+          ...denied,
+          outcome: 'KEY_UNAVAILABLE',
+          sent: false,
+          message:
+            'The stored key could not be opened. The connection was not verified.',
+        },
+      };
+    }
+    await c.query(
+      `UPDATE ct.model_text_attempts SET state='SENDING' WHERE tenant=$1 AND id=$2 AND state='RESERVED'`,
+      [tenant, attemptId],
+    );
+    return {
+      send: true as const,
+      apiKey,
+      model: connection.model as string,
+      dispatch: attempt.dispatch as 'list' | 'text',
+      timeoutMs: Number(limits.timeout_ms),
+      maxOutputTokens: Number(limits.max_output_tokens),
+      maxResponseBytes: Number(limits.max_response_bytes),
+      maxOutputChars: Number(limits.max_output_chars),
+      connectionId: attempt.connection_id as string,
+    };
+  }
+  async invoke(
+    admitted: {
+      apiKey: string;
+      model: string;
+      dispatch: 'list' | 'text';
+      timeoutMs: number;
+      maxOutputTokens: number;
+      maxResponseBytes: number;
+    },
+    text = '',
+  ) {
+    try {
+      if (admitted.dispatch === 'list') {
+        const models = await this.transport.listModels(admitted.apiKey);
+        return {
+          ok: true as const,
+          models,
+          usageReported: true,
+          text: null as string | null,
+        };
+      }
+      const generated = await this.transport.generate({
+        apiKey: admitted.apiKey,
+        model: admitted.model,
+        text,
+        timeoutMs: admitted.timeoutMs,
+        maxOutputTokens: admitted.maxOutputTokens,
+        maxResponseBytes: admitted.maxResponseBytes,
+      });
+      return {
+        ok: true as const,
+        models: null,
         text: generated.text,
-        authority: false,
-        execution: 'NONE',
-        sent: true,
         usageReported: generated.usageReported,
       };
     } catch (error) {
       const outcome = this.outcome(error);
+      return {
+        ok: false as const,
+        outcome,
+        mayStillComplete: outcome === 'TIMEOUT',
+      };
+    }
+  }
+  async record(
+    c: pg.PoolClient,
+    tenant: string,
+    attemptId: string,
+    provider: Awaited<ReturnType<ModelConnectionService['invoke']>>,
+    limits: { maxOutputChars: number; connectionId: string },
+  ) {
+    const attempt = (
+      await c.query(
+        'SELECT * FROM ct.model_text_attempts WHERE tenant=$1 AND id=$2 FOR UPDATE',
+        [tenant, attemptId],
+      )
+    ).rows[0];
+    if (!attempt || attempt.state !== 'SENDING') return this.stored(attempt);
+    if (!provider.ok) {
+      const state = provider.mayStillComplete ? 'UNCERTAIN' : 'SETTLED';
       await this.finish(
         c,
         tenant,
-        attempt,
-        outcome === 'TIMEOUT' ? 'UNCERTAIN' : 'SETTLED',
-        outcome,
+        attemptId,
+        state,
+        provider.outcome,
         null,
         false,
       );
       return {
         ...denied,
-        outcome,
+        outcome: provider.outcome,
         sent: true,
-        mayStillComplete: outcome === 'TIMEOUT',
+        mayStillComplete: provider.mayStillComplete,
+        message:
+          provider.outcome === 'LIVE_DISABLED'
+            ? 'Live Gemini calls are disabled. This did not verify the key or connection.'
+            : provider.mayStillComplete
+              ? 'The provider may have accepted this request. It was not retried.'
+              : 'The provider request failed. It was not retried.',
       };
     }
+    if (provider.models) {
+      const label = this.transport.mock ? VERIFICATION_LABEL : NOT_VERIFIED;
+      await c.query(
+        `UPDATE ct.model_connections
+         SET supported_models=$3, verification_label=$4, revision=revision+1
+         WHERE tenant=$1 AND id=$2`,
+        [
+          tenant,
+          limits.connectionId,
+          provider.models.map((model) => model.name),
+          label,
+        ],
+      );
+      await this.finish(c, tenant, attemptId, 'SETTLED', 'LISTED', null, true);
+      return {
+        ...denied,
+        outcome: 'LISTED',
+        verification: label,
+        models: provider.models.map((model) => model.name),
+        providerAction: true,
+        message: this.transport.mock
+          ? 'Mock-tested / live test pending. The connection was not live-verified.'
+          : 'A provider list returned. This version does not mark the connection live-verified.',
+      };
+    }
+    if ((provider.text ?? '').length > limits.maxOutputChars) {
+      await this.finish(
+        c,
+        tenant,
+        attemptId,
+        'SETTLED',
+        'OUTPUT_LIMIT',
+        null,
+        provider.usageReported,
+      );
+      return {
+        ...denied,
+        outcome: 'OUTPUT_LIMIT',
+        sent: true,
+        message: 'The answer exceeded the text limit and was not shown.',
+      };
+    }
+    const state = provider.usageReported ? 'SETTLED' : 'UNCERTAIN';
+    await this.finish(
+      c,
+      tenant,
+      attemptId,
+      state,
+      state === 'SETTLED' ? 'TEXT' : 'UNCERTAIN',
+      provider.text,
+      provider.usageReported,
+    );
+    return {
+      ...denied,
+      outcome: state,
+      text: provider.text,
+      authority: false,
+      execution: 'NONE',
+      sent: true,
+      usageReported: provider.usageReported,
+      mayStillComplete: state === 'UNCERTAIN',
+    };
+  }
+  async recover(c: pg.PoolClient, tenant: string, attemptId: string) {
+    const attempt = (
+      await c.query(
+        'SELECT * FROM ct.model_text_attempts WHERE tenant=$1 AND id=$2 FOR UPDATE',
+        [tenant, attemptId],
+      )
+    ).rows[0];
+    if (!attempt || attempt.state !== 'SENDING') return this.stored(attempt);
+    await this.finish(
+      c,
+      tenant,
+      attemptId,
+      'UNCERTAIN',
+      'POSSIBLY_SENT',
+      null,
+      false,
+    );
+    return {
+      ...denied,
+      outcome: 'UNCERTAIN',
+      sent: true,
+      mayStillComplete: true,
+      message: 'This request may already have been sent. It was not retried.',
+    };
+  }
+  private stored(
+    attempt:
+      | { state?: string; outcome?: string; response_text?: string }
+      | undefined,
+  ) {
+    return {
+      ...denied,
+      outcome: attempt?.outcome ?? attempt?.state ?? 'UNKNOWN',
+      text: attempt?.response_text ?? undefined,
+      sent:
+        attempt?.state === 'SENDING' ||
+        attempt?.state === 'SETTLED' ||
+        attempt?.state === 'UNCERTAIN',
+      mayStillComplete:
+        attempt?.state === 'SENDING' || attempt?.state === 'UNCERTAIN',
+    };
   }
   private async locked(c: pg.PoolClient, tenant: string, id: string) {
     const row = (
@@ -437,6 +611,7 @@ export class ModelConnectionService {
     inputChars: number,
     outputChars: number,
     idempotencyKey: string = randomUUID(),
+    dispatch: 'list' | 'text' = 'text',
   ) {
     const row = await this.locked(c, tenant, connectionId);
     if (row.status !== 'SEALED') throw Error('connection revoked');
@@ -457,9 +632,17 @@ export class ModelConnectionService {
       [tenant, connectionId],
     );
     await c.query(
-      `INSERT INTO ct.model_text_attempts(tenant,id,connection_id,principal,idempotency_key,state,input_chars)
-       VALUES($1,$2,$3,$4,$5,'RESERVED',$6)`,
-      [tenant, id, connectionId, principal, idempotencyKey, inputChars],
+      `INSERT INTO ct.model_text_attempts(tenant,id,connection_id,principal,idempotency_key,state,input_chars,dispatch)
+       VALUES($1,$2,$3,$4,$5,'RESERVED',$6,$7)`,
+      [
+        tenant,
+        id,
+        connectionId,
+        principal,
+        idempotencyKey,
+        inputChars,
+        dispatch,
+      ],
     );
     return id;
   }
@@ -525,6 +708,9 @@ export class ModelConnectionService {
     )
       return 'TIMEOUT';
     if (message === 'gemini live calls disabled') return 'LIVE_DISABLED';
+    if (message === 'gemini response too large') return 'BODY_LIMIT';
+    if (message === 'gemini generation limit unavailable')
+      return 'LIMIT_UNAVAILABLE';
     return 'PROVIDER_ERROR';
   }
 }

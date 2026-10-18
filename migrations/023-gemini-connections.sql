@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS ct.model_connections (
     model IS NULL OR model ~ '^models/[A-Za-z0-9][A-Za-z0-9._:-]{0,120}$'
   ),
   supported_models text[] NOT NULL DEFAULT '{}',
-  verification_label text NOT NULL DEFAULT 'mock-tested / live test pending'
-    CHECK (verification_label = 'mock-tested / live test pending'),
+  verification_label text NOT NULL DEFAULT 'not verified'
+    CHECK (verification_label IN ('not verified', 'mock-tested / live test pending')),
   assigned_principal text,
   created_by text NOT NULL,
   PRIMARY KEY (tenant, id),
@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS ct.model_connection_limits (
   max_output_chars bigint NOT NULL CHECK (max_output_chars BETWEEN 1 AND 4000),
   max_concurrent bigint NOT NULL CHECK (max_concurrent = 1),
   timeout_ms bigint NOT NULL CHECK (timeout_ms BETWEEN 1000 AND 10000),
+  max_output_tokens bigint NOT NULL CHECK (max_output_tokens BETWEEN 1 AND 256),
+  max_response_bytes bigint NOT NULL CHECK (max_response_bytes BETWEEN 256 AND 16384),
   requests_reserved bigint NOT NULL DEFAULT 0 CHECK (requests_reserved >= 0),
   requests_settled bigint NOT NULL DEFAULT 0 CHECK (requests_settled >= 0),
   concurrent_requests bigint NOT NULL DEFAULT 0 CHECK (concurrent_requests >= 0),
@@ -58,7 +60,8 @@ CREATE TABLE IF NOT EXISTS ct.model_text_attempts (
   connection_id text NOT NULL,
   principal text NOT NULL,
   idempotency_key text NOT NULL,
-  state text NOT NULL CHECK (state IN ('RESERVED', 'SENT', 'SETTLED', 'UNCERTAIN', 'BLOCKED')),
+  state text NOT NULL CHECK (state IN ('RESERVED', 'SENDING', 'SETTLED', 'UNCERTAIN', 'BLOCKED')),
+  dispatch text NOT NULL CHECK (dispatch IN ('list', 'text')),
   input_chars bigint NOT NULL CHECK (input_chars >= 0),
   outcome text,
   response_text text,
@@ -108,4 +111,21 @@ GRANT INSERT, UPDATE ON ct.model_connections TO ct_authority_api, ct_governor;
 GRANT INSERT, UPDATE ON ct.model_connection_limits TO ct_authority_api, ct_governor;
 GRANT INSERT, UPDATE ON ct.model_text_attempts TO ct_authority_api, ct_governor;
 GRANT INSERT ON ct.cognition_bindings TO ct_authority_api;
+
+ALTER TABLE ct.model_connections DROP CONSTRAINT IF EXISTS model_connections_verification_label_check;
+ALTER TABLE ct.model_connections ADD CONSTRAINT model_connections_verification_label_check
+  CHECK (verification_label IN ('not verified', 'mock-tested / live test pending'));
+ALTER TABLE ct.model_connections ALTER COLUMN verification_label SET DEFAULT 'not verified';
+ALTER TABLE ct.model_connection_limits ADD COLUMN IF NOT EXISTS max_output_tokens bigint;
+ALTER TABLE ct.model_connection_limits ADD COLUMN IF NOT EXISTS max_response_bytes bigint;
+UPDATE ct.model_connection_limits SET max_output_tokens=128 WHERE max_output_tokens IS NULL;
+UPDATE ct.model_connection_limits SET max_response_bytes=8192 WHERE max_response_bytes IS NULL;
+ALTER TABLE ct.model_connection_limits ALTER COLUMN max_output_tokens SET NOT NULL;
+ALTER TABLE ct.model_connection_limits ALTER COLUMN max_response_bytes SET NOT NULL;
+ALTER TABLE ct.model_text_attempts DROP CONSTRAINT IF EXISTS model_text_attempts_state_check;
+ALTER TABLE ct.model_text_attempts ADD CONSTRAINT model_text_attempts_state_check
+  CHECK (state IN ('RESERVED', 'SENDING', 'SETTLED', 'UNCERTAIN', 'BLOCKED'));
+ALTER TABLE ct.model_text_attempts ADD COLUMN IF NOT EXISTS dispatch text;
+UPDATE ct.model_text_attempts SET dispatch='text' WHERE dispatch IS NULL;
+ALTER TABLE ct.model_text_attempts ALTER COLUMN dispatch SET NOT NULL;
 COMMIT;

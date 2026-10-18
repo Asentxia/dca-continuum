@@ -1364,7 +1364,14 @@ def cmd(args,env=None):
 def sql(port,query,db='ct_dr'):
  return cmd(['psql','-h','127.0.0.1','-p',port,'-U','localtest','-d',db,'-v','ON_ERROR_STOP=1','-Atc',query])
 def start(directory,port):
- sock=base/('socket-'+str(port));sock.mkdir(mode=0o700);cmd(['pg_ctl','-D',directory,'-l',directory/'server.log','-o',f'-p {port} -h 127.0.0.1 -k {sock}','-w','start']);started.append(directory)
+ sock=base/('socket-'+str(port));sock.mkdir(mode=0o700)
+ try:cmd(['pg_ctl','-D',directory,'-l',directory/'server.log','-o',f'-p {port} -h 127.0.0.1 -k {sock}','-w','start'])
+ except Exception as error:
+  server_log=directory/'server.log'
+  detail=server_log.read_text(errors='replace') if server_log.exists() else 'server log was not created'
+  (out/f'server-{port}.log').write_text(detail)
+  raise RuntimeError(f'{error}\nPostgreSQL server log:\n{detail[-4000:]}') from error
+ started.append(directory)
 def stop(directory):
  cmd(['pg_ctl','-D',directory,'-m','immediate','-w','stop']);started.remove(directory)
 def probe(phase,port):
@@ -1378,7 +1385,7 @@ def until(fn,timeout=30):
 try:
  primary=base/'primary';cmd(['initdb','-D',primary,'-U','localtest','-A','trust','--encoding=UTF8','--locale=C'])
  archive_command=f"{sys.executable} {root/'tools'/'wal-archive.py'} %p {archive}/%f"
- with (primary/'postgresql.conf').open('a') as f:f.write(f"\nwal_level=replica\nmax_wal_senders=6\narchive_mode=on\narchive_timeout=1\narchive_command='{archive_command}'\nfsync=on\nsynchronous_commit=on\n")
+ with (primary/'postgresql.conf').open('a') as f:f.write(f"\nwal_level=replica\nmax_wal_senders=6\narchive_mode=on\narchive_timeout=1\narchive_command='{archive_command}'\nfsync=on\nsynchronous_commit=on\nshared_buffers=16MB\ndynamic_shared_memory_type=mmap\nmax_connections=20\n")
  with (primary/'pg_hba.conf').open('a') as f:f.write('\nhost replication localtest 127.0.0.1/32 trust\n')
  start(primary,55440);cmd(['createdb','-h','127.0.0.1','-p',55440,'-U','localtest','ct_dr'])
  for filename in ['001-foundation.sql','002-lock-privileges.sql','004-monotonic-fences.sql','005-identity-authority.sql','006-product-computers.sql','008-recovery-controls.sql','016-placement-generation.sql']:

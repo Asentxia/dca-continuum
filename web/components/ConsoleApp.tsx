@@ -147,6 +147,7 @@ export function ConsoleApp({
     } | null>(null),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
+    [modelAnswer, setModelAnswer] = useState(''),
     [busy, setBusy] = useState(false),
     [online, setOnline] = useState(true),
     [stale, setStale] = useState(false),
@@ -181,6 +182,7 @@ export function ConsoleApp({
     rowsRef = useRef<ConsoleItem[]>([]),
     identityInvalid = useRef(false),
     pendingCommand = useRef<PendingCommand | null>(null),
+    lastReceipt = useRef<{ status: string; result?: unknown } | null>(null),
     submitting = useRef(false);
   useEffect(() => {
     try {
@@ -509,6 +511,7 @@ export function ConsoleApp({
     );
     try {
       const result = await command(value, data!.csrf);
+      lastReceipt.current = result;
       if (!sameContext()) {
         // Keep correlation for GET-only recovery in the current or next view.
         return 'UNAVAILABLE';
@@ -549,7 +552,31 @@ export function ConsoleApp({
           a.click();
           URL.revokeObjectURL(url);
         }
-        setCreating(null);
+        const modelFlow = [
+          'create_model_connection',
+          'set_model_connection_limits',
+          'test_model_connection',
+          'select_model_connection_model',
+          'assign_model_connection',
+          'revoke_model_connection',
+          'try_vera_text',
+        ].includes(value.kind);
+        if (!modelFlow) setCreating(null);
+        if (value.kind === 'try_vera_text') {
+          const answer = result.result as {
+            text?: string;
+            message?: string;
+            outcome?: string;
+          };
+          const shown =
+            typeof answer.text === 'string' && answer.text
+              ? answer.text
+              : answer.message ||
+                answer.outcome ||
+                'No answer text was returned.';
+          setModelAnswer(shown);
+          setNotice(shown);
+        }
         frozen.current = Boolean(selected);
         if (!journalReady) setError('COMMAND_JOURNAL_UNAVAILABLE');
         const refreshed = await load();
@@ -614,6 +641,7 @@ export function ConsoleApp({
     const outcome = await issue(value);
     if (outcome !== 'APPLIED' && outcome !== 'DENIED')
       throw Error(outcome === 'UNCONFIRMED' ? 'REQUEST_UNCONFIRMED' : outcome);
+    return lastReceipt.current;
   }
   async function checkStoredOutcome() {
     const held = pendingCommand.current;
@@ -1164,6 +1192,19 @@ export function ConsoleApp({
                   csrf={data?.csrf ?? ''}
                   canAct={allowed}
                   busy={busy}
+                  existing={
+                    detail?.item.kind === 'integration'
+                      ? {
+                          id: detail.item.id,
+                          ...(detail.item.fields as {
+                            status?: string;
+                            model?: string | null;
+                            supportedModels?: string[];
+                            verification?: string;
+                          }),
+                        }
+                      : null
+                  }
                   onCommand={issueForm}
                   onClose={closeForm}
                 />
@@ -1174,12 +1215,10 @@ export function ConsoleApp({
                       ?.id ?? '',
                   )}
                   principal={detail.item.id}
+                  answer={modelAnswer}
                   canAct={detailAllowed}
                   busy={busy}
-                  onCommand={async (value) => {
-                    await issueForm(value);
-                    return undefined;
-                  }}
+                  onCommand={issueForm}
                   onClose={closeForm}
                 />
               ) : creating === 'task' || creating === 'grant' ? (
