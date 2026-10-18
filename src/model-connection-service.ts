@@ -20,6 +20,14 @@ const denied = {
   liveVerified: false,
 };
 
+// RESERVED is committed before any provider call. Revocation can still block it,
+// and restart does not send it. SENDING is committed immediately before the
+// network call and means the provider may already have accepted it: revocation
+// does not stop it, and a duplicate or restart records UNCERTAIN without
+// sending again. SETTLED is a finished answer or a definite failure. UNCERTAIN
+// covers timeouts, missing usage, and crashes after SENDING; the allowance
+// stays consumed and there is no automatic retry. BLOCKED means the request
+// was not sent. These are not dollar spending caps.
 export class ModelConnectionService {
   constructor(private transport: GeminiTransport = disabledGeminiTransport()) {}
   bind(transport: GeminiTransport) {

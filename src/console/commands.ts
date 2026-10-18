@@ -188,17 +188,13 @@ export class ConsoleCommands {
     );
     if (!admitted.send) {
       return tx(this.db, async (c) => {
-        const row = (
-          await c.query(
-            `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
-            [
-              reserved.tenant,
-              reserved.commandId,
-              JSON.stringify(admitted.result),
-            ],
-          )
-        ).rows[0];
-        return receipt(row, false);
+        const row = await this.finishCommand(
+          c,
+          reserved.tenant,
+          reserved.commandId,
+          admitted.result,
+        );
+        return receipt(row.row, !row.fresh);
       });
     }
     const provider = await this.models.invoke(admitted, body.text ?? '');
@@ -213,21 +209,45 @@ export class ConsoleCommands {
           connectionId: admitted.connectionId,
         },
       );
-      const row = (
-        await c.query(
-          `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
-          [reserved.tenant, reserved.commandId, JSON.stringify(result)],
-        )
-      ).rows[0];
-      await append(c, reserved.tenant, 'HUMAN_COMMAND_APPLIED', {
-        command: reserved.commandId,
-        kind: cmd.kind,
-        target: cmd.target,
-        externalEffect: false,
-      });
+      const row = await this.finishCommand(
+        c,
+        reserved.tenant,
+        reserved.commandId,
+        result,
+      );
+      if (row.fresh)
+        await append(c, reserved.tenant, 'HUMAN_COMMAND_APPLIED', {
+          command: reserved.commandId,
+          kind: cmd.kind,
+          target: cmd.target,
+          externalEffect: false,
+        });
       void actor;
-      return receipt(row, false);
+      return receipt(row.row, !row.fresh);
     });
+  }
+  private async finishCommand(
+    c: pg.PoolClient,
+    tenant: string,
+    commandId: string,
+    result: unknown,
+  ) {
+    const updated = (
+      await c.query(
+        `UPDATE ct.console_commands SET status='APPLIED', result=$3
+         WHERE tenant=$1 AND id=$2 AND status='PENDING' RETURNING *`,
+        [tenant, commandId, JSON.stringify(result)],
+      )
+    ).rows[0];
+    if (updated) return { row: updated, fresh: true };
+    const current = (
+      await c.query(
+        'SELECT * FROM ct.console_commands WHERE tenant=$1 AND id=$2',
+        [tenant, commandId],
+      )
+    ).rows[0];
+    if (!current) throw Error('command outcome not observed');
+    return { row: current, fresh: false };
   }
   private async recoverSending(reserved: {
     attempt: string;
@@ -240,13 +260,13 @@ export class ConsoleCommands {
         reserved.tenant,
         reserved.attempt,
       );
-      const row = (
-        await c.query(
-          `UPDATE ct.console_commands SET status='APPLIED', result=$3 WHERE tenant=$1 AND id=$2 RETURNING *`,
-          [reserved.tenant, reserved.commandId, JSON.stringify(result)],
-        )
-      ).rows[0];
-      return receipt(row, true);
+      const row = await this.finishCommand(
+        c,
+        reserved.tenant,
+        reserved.commandId,
+        result,
+      );
+      return receipt(row.row, true);
     });
   }
   async lookup(actor: VerifiedIdentity, key: string) {

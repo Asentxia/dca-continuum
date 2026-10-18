@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import type pg from 'pg';
-import { pool } from '../src/db.js';
+import { pool, tx } from '../src/db.js';
+import { ModelConnectionService } from '../src/model-connection-service.js';
 import { fixture } from './implementation-helpers.js';
 import { admin, fence } from './helpers.js';
 import { ConsoleCommands } from '../src/console/commands.js';
@@ -35,7 +36,13 @@ class MockGemini implements GeminiTransport {
     | 'malformed'
     | 'timeout'
     | 'tool'
-    | 'uncertain' = 'ok';
+    | 'uncertain'
+    | 'body' = 'ok';
+  gate: Promise<void> | null = null;
+  lastGenerate: {
+    maxOutputTokens: number;
+    maxResponseBytes: number;
+  } | null = null;
   async listModels(apiKey: string) {
     calls += 1;
     if (apiKey !== key) throw Error('gemini key rejected');
@@ -59,11 +66,18 @@ class MockGemini implements GeminiTransport {
     maxOutputTokens: number;
     maxResponseBytes: number;
   }) {
+    if (this.gate) await this.gate;
     assert.ok(input.maxOutputTokens >= 1);
     assert.ok(input.maxResponseBytes >= 256);
     calls += 1;
+    this.lastGenerate = {
+      maxOutputTokens: input.maxOutputTokens,
+      maxResponseBytes: input.maxResponseBytes,
+    };
     assert.equal(input.apiKey, key);
     assert.equal(input.model, 'models/mock-text');
+    if (this.mode === 'invalid') throw Error('gemini key rejected');
+    if (this.mode === 'body') throw Error('gemini response too large');
     if (this.mode === 'tool') throw Error('gemini tool rejected');
     if (this.mode === 'timeout') throw Error('The operation was aborted');
     if (this.mode === 'malformed') throw Error('gemini response malformed');
@@ -227,6 +241,29 @@ test('gemini requests stay on the fixed Google origin', async () => {
     const models = await transport.listModels('stub-key');
     assert.equal(models[0].name, 'models/mock-text');
     assert.equal(seen[0].redirect, 'error');
+    const generated = liveGeminiTransport(async (_url, init) => {
+      const body = JSON.parse(String(init.body));
+      assert.equal(body.generationConfig.maxOutputTokens, 8);
+      assert.equal(String(init.body).includes('stub-key'), false);
+      return {
+        status: 200,
+        arrayBuffer: async () => new Uint8Array(300).buffer,
+        json: async () => {
+          throw Error('body was read after the byte cap');
+        },
+      };
+    });
+    await assert.rejects(
+      generated.generate({
+        apiKey: 'stub-key',
+        model: 'models/mock-text',
+        text: 'hi',
+        timeoutMs: 1000,
+        maxOutputTokens: 8,
+        maxResponseBytes: 256,
+      }),
+      /gemini response too large/,
+    );
   } finally {
     delete process.env.CT_ENABLE_GEMINI;
   }
@@ -474,4 +511,381 @@ test('provider output is rendered as text', async () => {
   );
   assert.match(source, /<p className="model-text">\{text\}<\/p>/);
   assert.equal(source.includes('dangerouslySetInnerHTML'), false);
+});
+
+const openLimits = {
+  maxRequests: 10,
+  maxInputChars: 1000,
+  maxOutputChars: 1000,
+  maxOutputTokens: 32,
+  maxResponseBytes: 2048,
+  maxConcurrent: 1 as const,
+  timeoutMs: 1000,
+};
+
+async function prepare(id: string, limits: typeof openLimits = openLimits) {
+  mock.mode = 'ok';
+  mock.gate = null;
+  const owner = await f.actor('user');
+  const vera = id + '-vera';
+  await commands.execute(
+    owner,
+    command('create_model_connection', id, { name: 'Durable' }),
+  );
+  await commands.sealModelCredential(owner, id, key);
+  await commands.execute(
+    owner,
+    command('set_model_connection_limits', id, limits),
+  );
+  await commands.execute(owner, command('test_model_connection', id, {}));
+  await commands.execute(
+    owner,
+    command('select_model_connection_model', id, { model: 'models/mock-text' }),
+  );
+  await commands.execute(
+    owner,
+    command('create_vera', vera, {
+      name: 'Named agent',
+      description: 'A profile, not a permission.',
+    }),
+  );
+  await commands.execute(
+    owner,
+    command('assign_model_connection', id, { principal: vera }),
+  );
+  return { owner, vera };
+}
+
+async function attemptState(idempotency: string) {
+  const row = (
+    await admin.query(
+      `SELECT state, outcome, response_text FROM ct.model_text_attempts
+       WHERE tenant='a' AND idempotency_key=$1`,
+      [idempotency],
+    )
+  ).rows[0];
+  return row as
+    | { state: string; outcome: string | null; response_text: string | null }
+    | undefined;
+}
+
+test('duplicate submissions and crash recovery send a request at most once', async () => {
+  const id = prefix + '-once';
+  const { owner, vera } = await prepare(id);
+  const direct = new ModelConnectionService(mock);
+  const before = calls;
+  const reserved = await tx(writeDb, (c) =>
+    direct.reserveText(c, owner, id, vera, 'Hold', 'held-' + prefix),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(calls, before);
+  assert.equal((await attemptState('held-' + prefix))?.state, 'RESERVED');
+  const admitted = await tx(writeDb, (c) =>
+    direct.admit(c, 'a', reserved.attempt),
+  );
+  assert.equal(admitted.send, true);
+  assert.equal(calls, before);
+  const recovered = await tx(writeDb, (c) =>
+    direct.recover(c, 'a', reserved.attempt),
+  );
+  assert.equal(recovered.outcome, 'UNCERTAIN');
+  assert.equal(recovered.mayStillComplete, true);
+  const second = await tx(writeDb, (c) =>
+    direct.admit(c, 'a', reserved.attempt),
+  );
+  assert.equal(second.send, false);
+  assert.equal(calls, before);
+  let release: () => void = () => undefined;
+  mock.gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const idem = 'crash-' + prefix;
+  const first = commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Crash' }, idem),
+  );
+  for (let i = 0; i < 50; i++) {
+    if ((await attemptState(idem))?.state === 'SENDING') break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal((await attemptState(idem))?.state, 'SENDING');
+  const replay = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Crash' }, idem),
+  );
+  assert.equal((replay.result as { outcome: string }).outcome, 'UNCERTAIN');
+  assert.equal(
+    (replay.result as { mayStillComplete: boolean }).mayStillComplete,
+    true,
+  );
+  const during = calls;
+  release();
+  mock.gate = null;
+  await first;
+  assert.equal(calls, during + 1);
+  assert.equal((await attemptState(idem))?.state, 'UNCERTAIN');
+  assert.equal((await attemptState(idem))?.response_text, null);
+  const dup = 'dup-' + prefix;
+  const sent = calls;
+  const pair = await Promise.all([
+    commands.execute(
+      owner,
+      command('try_vera_text', id, { principal: vera, text: 'Once' }, dup),
+    ),
+    commands.execute(
+      owner,
+      command('try_vera_text', id, { principal: vera, text: 'Once' }, dup),
+    ),
+  ]);
+  assert.equal(calls, sent + 1);
+  assert.equal(pair.filter((row) => row.status === 'APPLIED').length, 2);
+  assert.equal(JSON.stringify(pair).includes(key), false);
+});
+
+test('revocation blocks only requests that have not been admitted', async () => {
+  const id = prefix + '-revoke';
+  const { owner, vera } = await prepare(id);
+  const direct = new ModelConnectionService(mock);
+  const before = calls;
+  const reserved = await tx(writeDb, (c) =>
+    direct.reserveText(c, owner, id, vera, 'Queued', 'queued-' + prefix),
+  );
+  const revoked = await commands.execute(
+    owner,
+    command('revoke_model_connection', id, {}),
+  );
+  assert.equal(
+    (revoked.result as { sentRequestsMayComplete: boolean })
+      .sentRequestsMayComplete,
+    true,
+  );
+  const admitted = await tx(writeDb, (c) =>
+    direct.admit(c, 'a', reserved.attempt),
+  );
+  assert.equal(admitted.send, false);
+  assert.equal((await attemptState('queued-' + prefix))?.state, 'BLOCKED');
+  const later = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'After' }),
+  );
+  assert.equal(later.status, 'DENIED');
+  assert.equal(calls, before);
+  const live = prefix + '-inflight';
+  const ready = await prepare(live);
+  let release: () => void = () => undefined;
+  mock.gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const idem = 'inflight-' + prefix;
+  const started = calls;
+  const pending = commands.execute(
+    ready.owner,
+    command(
+      'try_vera_text',
+      live,
+      { principal: ready.vera, text: 'Sent' },
+      idem,
+    ),
+  );
+  for (let i = 0; i < 50; i++) {
+    if ((await attemptState(idem))?.state === 'SENDING') break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal((await attemptState(idem))?.state, 'SENDING');
+  await commands.execute(
+    ready.owner,
+    command('revoke_model_connection', live, {}),
+  );
+  assert.equal((await attemptState(idem))?.state, 'SENDING');
+  release();
+  mock.gate = null;
+  const finished = await pending;
+  assert.equal(finished.status, 'APPLIED');
+  assert.equal((finished.result as { sent: boolean }).sent, true);
+  assert.notEqual((await attemptState(idem))?.state, 'BLOCKED');
+  assert.equal(calls, started + 1);
+  const follow = await commands.execute(
+    ready.owner,
+    command('try_vera_text', live, { principal: ready.vera, text: 'Again' }),
+  );
+  assert.equal(follow.status, 'DENIED');
+  assert.equal(calls, started + 1);
+});
+
+test('limits and provider failures do not become a successful answer', async () => {
+  const id = prefix + '-limits';
+  const { owner, vera } = await prepare(id, {
+    ...openLimits,
+    maxRequests: 3,
+    maxInputChars: 4,
+    maxOutputTokens: 16,
+  });
+  const before = calls;
+  const tooLong = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'hello' }),
+  );
+  assert.equal(tooLong.status, 'DENIED');
+  assert.equal(calls, before);
+  const first = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'hi' }),
+  );
+  assert.equal(first.status, 'APPLIED');
+  assert.equal(mock.lastGenerate?.maxOutputTokens, 16);
+  const second = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'yo' }),
+  );
+  assert.equal(second.status, 'APPLIED');
+  const capped = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'no' }),
+  );
+  assert.equal(capped.status, 'DENIED');
+  assert.equal(calls, before + 2);
+  const narrow = prefix + '-narrow';
+  const small = await prepare(narrow, { ...openLimits, maxOutputChars: 1 });
+  const hidden = await commands.execute(
+    small.owner,
+    command('try_vera_text', narrow, {
+      principal: small.vera,
+      text: 'hi',
+    }),
+  );
+  assert.equal((hidden.result as { outcome: string }).outcome, 'OUTPUT_LIMIT');
+  assert.equal((hidden.result as { text?: string }).text, undefined);
+  const held = prefix + '-held';
+  const busy = await prepare(held);
+  const direct = new ModelConnectionService(mock);
+  const mark = calls;
+  await tx(writeDb, (c) =>
+    direct.reserveText(
+      c,
+      busy.owner,
+      held,
+      busy.vera,
+      'Wait',
+      'slot-' + prefix,
+    ),
+  );
+  const crowded = await commands.execute(
+    busy.owner,
+    command('try_vera_text', held, { principal: busy.vera, text: 'Next' }),
+  );
+  assert.equal(crowded.status, 'DENIED');
+  assert.equal(calls, mark);
+  const failures = prefix + '-failures';
+  const ready = await prepare(failures, { ...openLimits, maxRequests: 8 });
+  const cases: Array<[MockGemini['mode'], string, boolean]> = [
+    ['body', 'BODY_LIMIT', false],
+    ['timeout', 'TIMEOUT', true],
+    ['malformed', 'MALFORMED', false],
+    ['invalid', 'INVALID_KEY', false],
+    ['tool', 'TOOL_REJECTED', false],
+    ['limit', 'RATE_LIMIT', false],
+    ['uncertain', 'UNCERTAIN', true],
+  ];
+  for (const [mode, outcome, uncertain] of cases) {
+    mock.mode = mode;
+    const sent = calls;
+    const result = await commands.execute(
+      ready.owner,
+      command('try_vera_text', failures, {
+        principal: ready.vera,
+        text: mode,
+      }),
+    );
+    assert.equal(result.status, 'APPLIED', mode);
+    const body = result.result as {
+      outcome: string;
+      mayStillComplete?: boolean;
+      authority?: boolean;
+      text?: string;
+    };
+    assert.equal(body.outcome, outcome);
+    assert.equal(body.mayStillComplete ?? false, uncertain);
+    assert.notEqual(body.authority, true);
+    assert.equal(calls, sent + 1);
+    assert.equal(JSON.stringify(result).includes(key), false);
+  }
+  mock.mode = 'ok';
+  const bare = prefix + '-bare';
+  const ownerOnly = await f.actor('user');
+  await commands.execute(
+    ownerOnly,
+    command('create_model_connection', bare, { name: 'Bare' }),
+  );
+  await commands.sealModelCredential(ownerOnly, bare, key);
+  await commands.execute(
+    ownerOnly,
+    command('set_model_connection_limits', bare, openLimits),
+  );
+  await admin.query(
+    'DELETE FROM ct.model_connection_limits WHERE connection_id=$1',
+    [bare],
+  );
+  const missing = calls;
+  const unavailable = await commands.execute(
+    ownerOnly,
+    command('test_model_connection', bare, {}),
+  );
+  assert.equal(unavailable.status, 'DENIED');
+  assert.equal(calls, missing);
+});
+
+test('stale, cross-tenant, and disabled calls are refused without a provider send', async () => {
+  const id = prefix + '-guard';
+  const { owner, vera } = await prepare(id);
+  const before = calls;
+  const stale = await f.human.verify(
+    await f.token('user', 'a', {
+      auth_time: Math.floor(Date.now() / 1000) - 600,
+    }),
+  );
+  await assert.rejects(
+    commands.execute(
+      stale,
+      command('try_vera_text', id, { principal: vera, text: 'Stale' }),
+    ),
+    /fresh owner MFA required/,
+  );
+  const other = await f.actor('user', 'b');
+  const foreign = await commands.execute(
+    other,
+    command('try_vera_text', id, { principal: vera, text: 'Other' }),
+  );
+  assert.equal(foreign.status, 'DENIED');
+  const machine = await f.actor('machine');
+  await assert.rejects(
+    commands.execute(
+      machine,
+      command('try_vera_text', id, { principal: vera, text: 'Machine' }),
+    ),
+    /fresh owner MFA required/,
+  );
+  assert.equal(calls, before);
+  const disabled = new ConsoleCommands(
+    writeDb,
+    f.authority,
+    f.product,
+    fence,
+    'LOCAL_FIXTURE',
+  );
+  const checked = await disabled.execute(
+    owner,
+    command('test_model_connection', id, {}),
+  );
+  const body = checked.result as { outcome?: string; message?: string };
+  assert.equal(body.outcome, 'LIVE_DISABLED');
+  assert.match(String(body.message), /did not verify the key or connection/);
+  assert.equal(JSON.stringify(checked).includes(key), false);
+  const label = (
+    await admin.query(
+      'SELECT verification_label FROM ct.model_connections WHERE id=$1',
+      [id],
+    )
+  ).rows[0].verification_label;
+  assert.equal(label, 'mock-tested / live test pending');
+  assert.equal(calls, before);
 });
