@@ -701,7 +701,7 @@ describe('real console forms and durable human-command outcomes', () => {
     const request = vi.mocked(command).mock.calls[0][0];
     const raw = sessionStorage.getItem(commandJournalKey);
     view.rerender(<ConsoleApp section="agents" mode="LOCAL_FIXTURE" />);
-    await screen.findByRole('heading', { name: 'Agents / VERA' });
+    await screen.findByRole('heading', { name: 'VERAs' });
     await waitFor(() =>
       expect(vi.mocked(read).mock.calls.at(-1)?.[0]).toBe('agents'),
     );
