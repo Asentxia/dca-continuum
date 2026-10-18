@@ -42,6 +42,9 @@ export class ConsoleCommands {
   useTransport(transport: GeminiTransport) {
     this.models.bind(transport);
   }
+  /** Test seam for the gap after a reservation commits and before dispatch. */
+  beforeAdmit: (() => Promise<void>) | null = null;
+  private readonly sending = new Set<string>();
   async sealModelCredential(
     actor: VerifiedIdentity,
     connectionId: string,
@@ -51,7 +54,10 @@ export class ConsoleCommands {
       throw Error('live commands qualification pending');
     if (typeof connectionId !== 'string' || typeof apiKey !== 'string')
       throw Error('model credential rejected');
-    return tx(this.db, (c) => this.models.seal(c, actor, connectionId, apiKey));
+    return tx(this.db, async (c) => {
+      await activeControl(c, this.fence);
+      return this.models.seal(c, actor, connectionId, apiKey);
+    });
   }
   async execute(actor: VerifiedIdentity, input: unknown) {
     rejectSecretFields(input);
@@ -95,13 +101,15 @@ export class ConsoleCommands {
               tenant: i.tenant,
               commandId: previous.id,
             };
-          if (attempt?.state === 'SENDING')
+          if (attempt?.state === 'SENDING') {
+            if (this.sending.has(attempt.id)) return receipt(previous, true);
             return {
               __recover: true,
               attempt: attempt.id,
               tenant: i.tenant,
               commandId: previous.id,
             };
+          }
         }
         return receipt(previous, true);
       }
@@ -183,9 +191,13 @@ export class ConsoleCommands {
     body: { text?: string },
     reserved: { attempt: string; tenant: string; commandId: string },
   ) {
-    const admitted = await tx(this.db, (c) =>
-      this.models.admit(c, reserved.tenant, reserved.attempt),
-    );
+    if (this.beforeAdmit) await this.beforeAdmit();
+    const admitted = await tx(this.db, async (c) => {
+      await activeControl(c, this.fence);
+      const identity = await enrolled(c, actor, true);
+      if (identity.tenant !== reserved.tenant) throw Error('attempt scope');
+      return this.models.admit(c, reserved.tenant, reserved.attempt);
+    });
     if (!admitted.send) {
       return tx(this.db, async (c) => {
         const row = await this.finishCommand(
@@ -197,34 +209,39 @@ export class ConsoleCommands {
         return receipt(row.row, !row.fresh);
       });
     }
-    const provider = await this.models.invoke(admitted, body.text ?? '');
-    return tx(this.db, async (c) => {
-      const result = await this.models.record(
-        c,
-        reserved.tenant,
-        reserved.attempt,
-        provider,
-        {
-          maxOutputChars: admitted.maxOutputChars,
-          connectionId: admitted.connectionId,
-        },
-      );
-      const row = await this.finishCommand(
-        c,
-        reserved.tenant,
-        reserved.commandId,
-        result,
-      );
-      if (row.fresh)
-        await append(c, reserved.tenant, 'HUMAN_COMMAND_APPLIED', {
-          command: reserved.commandId,
-          kind: cmd.kind,
-          target: cmd.target,
-          externalEffect: false,
-        });
-      void actor;
-      return receipt(row.row, !row.fresh);
-    });
+    this.sending.add(reserved.attempt);
+    try {
+      const provider = await this.models.invoke(admitted, body.text ?? '');
+      return await tx(this.db, async (c) => {
+        const result = await this.models.record(
+          c,
+          reserved.tenant,
+          reserved.attempt,
+          provider,
+          {
+            maxOutputChars: admitted.maxOutputChars,
+            connectionId: admitted.connectionId,
+          },
+        );
+        const row = await this.finishCommand(
+          c,
+          reserved.tenant,
+          reserved.commandId,
+          result,
+        );
+        if (row.fresh)
+          await append(c, reserved.tenant, 'HUMAN_COMMAND_APPLIED', {
+            command: reserved.commandId,
+            kind: cmd.kind,
+            target: cmd.target,
+            externalEffect: false,
+          });
+        void actor;
+        return receipt(row.row, !row.fresh);
+      });
+    } finally {
+      this.sending.delete(reserved.attempt);
+    }
   }
   private async finishCommand(
     c: pg.PoolClient,

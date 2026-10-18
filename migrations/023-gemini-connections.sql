@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS ct.model_text_attempts (
   response_text text,
   reported_usage boolean NOT NULL DEFAULT false,
   may_still_complete boolean NOT NULL DEFAULT false,
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (tenant, id),
   UNIQUE (tenant, idempotency_key),
   FOREIGN KEY (tenant, connection_id) REFERENCES ct.model_connections (tenant, id),
@@ -128,4 +129,8 @@ ALTER TABLE ct.model_text_attempts ADD CONSTRAINT model_text_attempts_state_chec
 ALTER TABLE ct.model_text_attempts ADD COLUMN IF NOT EXISTS dispatch text;
 UPDATE ct.model_text_attempts SET dispatch='text' WHERE dispatch IS NULL;
 ALTER TABLE ct.model_text_attempts ALTER COLUMN dispatch SET NOT NULL;
+ALTER TABLE ct.model_text_attempts ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+UPDATE ct.model_text_attempts SET updated_at=clock_timestamp() WHERE updated_at IS NULL;
+ALTER TABLE ct.model_text_attempts ALTER COLUMN updated_at SET DEFAULT clock_timestamp();
+ALTER TABLE ct.model_text_attempts ALTER COLUMN updated_at SET NOT NULL;
 COMMIT;

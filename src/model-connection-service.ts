@@ -114,7 +114,7 @@ export class ModelConnectionService {
     ];
     if (bounds.some((n) => !Number.isSafeInteger(n)))
       throw Error('connection limits');
-    await c.query(
+    const written = await c.query(
       `INSERT INTO ct.model_connection_limits(tenant,connection_id,max_requests,max_input_chars,max_output_chars,max_concurrent,timeout_ms,max_output_tokens,max_response_bytes)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (tenant, connection_id) DO UPDATE SET
@@ -140,6 +140,7 @@ export class ModelConnectionService {
         limits.maxResponseBytes,
       ],
     );
+    if (written.rowCount !== 1) throw Error('connection limits locked');
     await this.bump(c, i.tenant, connectionId);
     return {
       ...denied,
@@ -191,6 +192,7 @@ export class ModelConnectionService {
   ) {
     const i = await enrolled(c, actor, true);
     const row = await this.locked(c, i.tenant, connectionId);
+    if (row.status !== 'SEALED') throw Error('connection not ready');
     if (!row.supported_models.includes(model)) throw Error('unsupported model');
     await c.query(
       `UPDATE ct.model_connections SET model=$3, revision=revision+1 WHERE tenant=$1 AND id=$2`,
@@ -216,6 +218,11 @@ export class ModelConnectionService {
       )
     ).rows[0];
     if (!vera) throw Error('vera scope');
+    await c.query(
+      `UPDATE ct.model_connections SET assigned_principal=NULL, revision=revision+1
+       WHERE tenant=$1 AND assigned_principal=$2 AND id<>$3`,
+      [i.tenant, principal, connectionId],
+    );
     await c.query(
       `UPDATE ct.model_connections SET assigned_principal=$3, revision=revision+1
        WHERE tenant=$1 AND id=$2`,
@@ -292,6 +299,19 @@ export class ModelConnectionService {
     const row = await this.locked(c, i.tenant, connectionId);
     if (row.assigned_principal !== principal || !row.model)
       throw Error('connection assignment');
+    const bound = (
+      await c.query(
+        `SELECT model, configuration_reference FROM ct.cognition_bindings
+         WHERE tenant=$1 AND principal=$2 ORDER BY revision DESC LIMIT 1`,
+        [i.tenant, principal],
+      )
+    ).rows[0];
+    if (
+      !bound ||
+      bound.configuration_reference !== connectionId ||
+      bound.model !== row.model
+    )
+      throw Error('connection binding stale');
     if (typeof text !== 'string' || !text.trim()) throw Error('text required');
     const limits = await this.limits(c, i.tenant, connectionId);
     if (text.length > Number(limits.max_input_chars))
@@ -375,7 +395,8 @@ export class ModelConnectionService {
       };
     }
     await c.query(
-      `UPDATE ct.model_text_attempts SET state='SENDING' WHERE tenant=$1 AND id=$2 AND state='RESERVED'`,
+      `UPDATE ct.model_text_attempts SET state='SENDING', updated_at=clock_timestamp()
+       WHERE tenant=$1 AND id=$2 AND state='RESERVED'`,
       [tenant, attemptId],
     );
     return {
@@ -430,7 +451,7 @@ export class ModelConnectionService {
       return {
         ok: false as const,
         outcome,
-        mayStillComplete: outcome === 'TIMEOUT',
+        mayStillComplete: outcome === 'TIMEOUT' || outcome === 'PROVIDER_ERROR',
       };
     }
   }
@@ -623,6 +644,7 @@ export class ModelConnectionService {
   ) {
     const row = await this.locked(c, tenant, connectionId);
     if (row.status !== 'SEALED') throw Error('connection revoked');
+    await this.reap(c, tenant, connectionId);
     const limits = await this.limits(c, tenant, connectionId);
     if (
       Number(limits.requests_reserved) + Number(limits.requests_settled) + 1 >
@@ -681,7 +703,8 @@ export class ModelConnectionService {
     );
     await c.query(
       `UPDATE ct.model_text_attempts
-       SET state=$3, outcome=$4, response_text=$5, reported_usage=$6, may_still_complete=$7
+       SET state=$3, outcome=$4, response_text=$5, reported_usage=$6, may_still_complete=$7,
+           updated_at=clock_timestamp()
        WHERE tenant=$1 AND id=$2`,
       [
         tenant,
@@ -699,6 +722,39 @@ export class ModelConnectionService {
       'UPDATE ct.model_connections SET revision=revision+1 WHERE tenant=$1 AND id=$2',
       [tenant, id],
     );
+  }
+  private async reap(c: pg.PoolClient, tenant: string, connectionId: string) {
+    const limits = await this.limits(c, tenant, connectionId);
+    const stale = (
+      await c.query(
+        `SELECT id, state FROM ct.model_text_attempts
+         WHERE tenant=$1 AND connection_id=$2 AND state IN ('RESERVED','SENDING')
+           AND updated_at < clock_timestamp() - ($3 * interval '1 millisecond')`,
+        [tenant, connectionId, Number(limits.timeout_ms) + 30000],
+      )
+    ).rows;
+    for (const attempt of stale) {
+      if (attempt.state === 'RESERVED')
+        await this.finish(
+          c,
+          tenant,
+          attempt.id,
+          'BLOCKED',
+          'ABANDONED',
+          null,
+          false,
+        );
+      else
+        await this.finish(
+          c,
+          tenant,
+          attempt.id,
+          'UNCERTAIN',
+          'POSSIBLY_SENT',
+          null,
+          false,
+        );
+    }
   }
   private outcome(error: unknown) {
     const message = error instanceof Error ? error.message : '';

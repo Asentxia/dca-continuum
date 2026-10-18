@@ -37,7 +37,8 @@ class MockGemini implements GeminiTransport {
     | 'timeout'
     | 'tool'
     | 'uncertain'
-    | 'body' = 'ok';
+    | 'body'
+    | 'transport' = 'ok';
   gate: Promise<void> | null = null;
   lastGenerate: {
     maxOutputTokens: number;
@@ -53,6 +54,10 @@ class MockGemini implements GeminiTransport {
       models: [
         {
           name: 'models/mock-text',
+          supportedGenerationMethods: ['generateContent'],
+        },
+        {
+          name: 'models/mock-alt',
           supportedGenerationMethods: ['generateContent'],
         },
       ],
@@ -75,8 +80,11 @@ class MockGemini implements GeminiTransport {
       maxResponseBytes: input.maxResponseBytes,
     };
     assert.equal(input.apiKey, key);
-    assert.equal(input.model, 'models/mock-text');
+    assert.ok(
+      input.model === 'models/mock-text' || input.model === 'models/mock-alt',
+    );
     if (this.mode === 'invalid') throw Error('gemini key rejected');
+    if (this.mode === 'transport') throw Error('gemini provider error');
     if (this.mode === 'body') throw Error('gemini response too large');
     if (this.mode === 'tool') throw Error('gemini tool rejected');
     if (this.mode === 'timeout') throw Error('The operation was aborted');
@@ -613,18 +621,15 @@ test('duplicate submissions and crash recovery send a request at most once', asy
     owner,
     command('try_vera_text', id, { principal: vera, text: 'Crash' }, idem),
   );
-  assert.equal((replay.result as { outcome: string }).outcome, 'UNCERTAIN');
-  assert.equal(
-    (replay.result as { mayStillComplete: boolean }).mayStillComplete,
-    true,
-  );
+  assert.equal(replay.status, 'PENDING');
   const during = calls;
   release();
   mock.gate = null;
-  await first;
+  const finished = await first;
+  assert.equal(finished.status, 'APPLIED');
+  assert.match(String((finished.result as { text?: string }).text), /Crash/);
   assert.equal(calls, during + 1);
-  assert.equal((await attemptState(idem))?.state, 'UNCERTAIN');
-  assert.equal((await attemptState(idem))?.response_text, null);
+  assert.equal((await attemptState(idem))?.state, 'SETTLED');
   const dup = 'dup-' + prefix;
   const sent = calls;
   const pair = await Promise.all([
@@ -776,9 +781,10 @@ test('limits and provider failures do not become a successful answer', async () 
   assert.equal(crowded.status, 'DENIED');
   assert.equal(calls, mark);
   const failures = prefix + '-failures';
-  const ready = await prepare(failures, { ...openLimits, maxRequests: 8 });
+  const ready = await prepare(failures, { ...openLimits, maxRequests: 12 });
   const cases: Array<[MockGemini['mode'], string, boolean]> = [
     ['body', 'BODY_LIMIT', false],
+    ['transport', 'PROVIDER_ERROR', true],
     ['timeout', 'TIMEOUT', true],
     ['malformed', 'MALFORMED', false],
     ['invalid', 'INVALID_KEY', false],
@@ -888,4 +894,149 @@ test('stale, cross-tenant, and disabled calls are refused without a provider sen
   ).rows[0].verification_label;
   assert.equal(label, 'mock-tested / live test pending');
   assert.equal(calls, before);
+});
+
+test('a closed recovery fence stops sealing and dispatch before a provider call', async () => {
+  const id = prefix + '-fence';
+  const owner = await f.actor('user');
+  await commands.execute(
+    owner,
+    command('create_model_connection', id, { name: 'Fenced' }),
+  );
+  await admin.query('UPDATE ct.control SET blocked=true WHERE singleton');
+  try {
+    await assert.rejects(
+      commands.sealModelCredential(owner, id, key),
+      /recovery fence/,
+    );
+  } finally {
+    await admin.query('UPDATE ct.control SET blocked=false WHERE singleton');
+  }
+  await commands.sealModelCredential(owner, id, key);
+  const { vera } = await prepare(id + '-ready');
+  const readyOwner = await f.actor('user');
+  const before = calls;
+  const idem = 'fence-' + prefix;
+  commands.beforeAdmit = async () => {
+    await admin.query('UPDATE ct.control SET blocked=true WHERE singleton');
+  };
+  try {
+    await assert.rejects(
+      commands.execute(
+        readyOwner,
+        command(
+          'try_vera_text',
+          id + '-ready',
+          { principal: vera, text: 'Wait' },
+          idem,
+        ),
+      ),
+      /recovery fence/,
+    );
+    assert.equal(calls, before);
+    assert.equal((await attemptState(idem))?.state, 'RESERVED');
+  } finally {
+    commands.beforeAdmit = null;
+    await admin.query('UPDATE ct.control SET blocked=false WHERE singleton');
+  }
+  const sent = await commands.execute(
+    readyOwner,
+    command(
+      'try_vera_text',
+      id + '-ready',
+      { principal: vera, text: 'Wait' },
+      idem,
+    ),
+  );
+  assert.equal(sent.status, 'APPLIED');
+  assert.equal(calls, before + 1);
+});
+
+test('stale bindings, locked limits, and stranded attempts stay honest', async () => {
+  const id = prefix + '-bind';
+  const { owner, vera } = await prepare(id);
+  const before = calls;
+  const changed = await commands.execute(
+    owner,
+    command('select_model_connection_model', id, { model: 'models/mock-alt' }),
+  );
+  assert.equal(changed.status, 'APPLIED');
+  const drifted = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Old' }),
+  );
+  assert.equal(drifted.status, 'DENIED');
+  assert.equal(calls, before);
+  await commands.execute(
+    owner,
+    command('assign_model_connection', id, { principal: vera }),
+  );
+  const current = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'New' }),
+  );
+  assert.equal(current.status, 'APPLIED');
+  assert.equal(mock.lastGenerate?.maxOutputTokens, 32);
+  assert.equal(calls, before + 1);
+  const other = prefix + '-other';
+  await commands.execute(
+    owner,
+    command('create_model_connection', other, { name: 'Other' }),
+  );
+  await commands.sealModelCredential(owner, other, key);
+  await commands.execute(
+    owner,
+    command('set_model_connection_limits', other, openLimits),
+  );
+  await commands.execute(owner, command('test_model_connection', other, {}));
+  await commands.execute(
+    owner,
+    command('select_model_connection_model', other, {
+      model: 'models/mock-text',
+    }),
+  );
+  await commands.execute(
+    owner,
+    command('assign_model_connection', other, { principal: vera }),
+  );
+  const displaced = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Displaced' }),
+  );
+  assert.equal(displaced.status, 'DENIED');
+  const locked = await commands.execute(
+    owner,
+    command('set_model_connection_limits', id, {
+      ...openLimits,
+      maxRequests: 1,
+    }),
+  );
+  assert.equal(locked.status, 'DENIED');
+  const stored = (
+    await admin.query(
+      'SELECT max_requests FROM ct.model_connection_limits WHERE connection_id=$1',
+      [id],
+    )
+  ).rows[0].max_requests;
+  assert.equal(Number(stored), 10);
+  const direct = new ModelConnectionService(mock);
+  const stuck = 'stuck-' + prefix;
+  await tx(writeDb, (c) =>
+    direct.reserveText(c, owner, other, vera, 'Old', stuck),
+  );
+  await admin.query(
+    `UPDATE ct.model_text_attempts
+     SET state='SENDING', updated_at=clock_timestamp() - interval '2 minutes'
+     WHERE tenant='a' AND idempotency_key=$1`,
+    [stuck],
+  );
+  const mark = calls;
+  const resumed = await commands.execute(
+    owner,
+    command('try_vera_text', other, { principal: vera, text: 'Next' }),
+  );
+  assert.equal(resumed.status, 'APPLIED');
+  assert.equal(calls, mark + 1);
+  assert.equal((await attemptState(stuck))?.state, 'UNCERTAIN');
+  assert.equal((await attemptState(stuck))?.outcome, 'POSSIBLY_SENT');
 });
