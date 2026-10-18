@@ -222,8 +222,17 @@ test('an existing database keeps tasks and VERA profiles when the connection mig
   assert.match(before, /Kept/);
   assert.equal(psql(['-f', 'migrations/023-gemini-connections.sql']).status, 0);
   assert.equal(
-    psql(['-c', 'ALTER TABLE ct.model_text_attempts DROP COLUMN updated_at'])
-      .status,
+    psql([
+      '-c',
+      `INSERT INTO ct.model_connections(tenant,id,name,provider,status,created_by)
+       VALUES('a','kept-gemini','Kept connection','gemini','AWAITING_KEY','kept-owner');
+       INSERT INTO ct.model_connection_limits(tenant,connection_id,max_requests,max_input_chars,max_output_chars,max_concurrent,timeout_ms,max_output_tokens,max_response_bytes)
+       VALUES('a','kept-gemini',5,1000,1000,1,5000,64,1024);
+       INSERT INTO ct.model_text_attempts(tenant,id,connection_id,principal,idempotency_key,state,dispatch,input_chars)
+       VALUES('a','kept-attempt','kept-gemini','kept-vera','kept-key','RESERVED','list',3);
+       ALTER TABLE ct.model_text_attempts DROP COLUMN updated_at, DROP COLUMN dispatch;
+       ALTER TABLE ct.model_connection_limits DROP COLUMN max_output_tokens, DROP COLUMN max_response_bytes;`,
+    ]).status,
     0,
   );
   assert.equal(
@@ -237,9 +246,12 @@ test('an existing database keeps tasks and VERA profiles when the connection mig
   assert.match(
     psql([
       '-Atc',
-      "SELECT column_name FROM information_schema.columns WHERE table_schema='ct' AND table_name='model_text_attempts' AND column_name='updated_at'",
+      `SELECT (updated_at IS NOT NULL)::text||dispatch
+       FROM ct.model_text_attempts WHERE id='kept-attempt';
+       SELECT max_output_tokens::text||':'||max_response_bytes::text
+       FROM ct.model_connection_limits WHERE connection_id='kept-gemini';`,
     ]).stdout,
-    /updated_at/,
+    /truetext\n128:8192/,
   );
   const afterRows = psql([
     '-Atc',

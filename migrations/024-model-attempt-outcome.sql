@@ -1,23 +1,26 @@
 -- Repair databases that recorded 023 before these columns were edited into that file.
 -- The filename ledger does not re-run 023. Fresh installs already create the columns.
+-- Defaults backfill existing rows as DDL, so row-level security does not hide them.
 BEGIN;
 SET ROLE ct_owner;
 
-ALTER TABLE ct.model_text_attempts ADD COLUMN IF NOT EXISTS updated_at timestamptz;
-UPDATE ct.model_text_attempts SET updated_at = clock_timestamp() WHERE updated_at IS NULL;
-ALTER TABLE ct.model_text_attempts ALTER COLUMN updated_at SET DEFAULT clock_timestamp();
-ALTER TABLE ct.model_text_attempts ALTER COLUMN updated_at SET NOT NULL;
+ALTER TABLE ct.model_text_attempts
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT clock_timestamp();
 
-ALTER TABLE ct.model_text_attempts ADD COLUMN IF NOT EXISTS dispatch text;
-UPDATE ct.model_text_attempts SET dispatch = 'text' WHERE dispatch IS NULL;
-ALTER TABLE ct.model_text_attempts ALTER COLUMN dispatch SET NOT NULL;
+ALTER TABLE ct.model_text_attempts
+  ADD COLUMN IF NOT EXISTS dispatch text NOT NULL DEFAULT 'text'
+  CHECK (dispatch IN ('list', 'text'));
+ALTER TABLE ct.model_text_attempts ALTER COLUMN dispatch DROP DEFAULT;
 
-ALTER TABLE ct.model_connection_limits ADD COLUMN IF NOT EXISTS max_output_tokens bigint;
-ALTER TABLE ct.model_connection_limits ADD COLUMN IF NOT EXISTS max_response_bytes bigint;
-UPDATE ct.model_connection_limits SET max_output_tokens = 128 WHERE max_output_tokens IS NULL;
-UPDATE ct.model_connection_limits SET max_response_bytes = 8192 WHERE max_response_bytes IS NULL;
-ALTER TABLE ct.model_connection_limits ALTER COLUMN max_output_tokens SET NOT NULL;
-ALTER TABLE ct.model_connection_limits ALTER COLUMN max_response_bytes SET NOT NULL;
+ALTER TABLE ct.model_connection_limits
+  ADD COLUMN IF NOT EXISTS max_output_tokens bigint NOT NULL DEFAULT 128
+  CHECK (max_output_tokens BETWEEN 1 AND 256);
+ALTER TABLE ct.model_connection_limits ALTER COLUMN max_output_tokens DROP DEFAULT;
+
+ALTER TABLE ct.model_connection_limits
+  ADD COLUMN IF NOT EXISTS max_response_bytes bigint NOT NULL DEFAULT 8192
+  CHECK (max_response_bytes BETWEEN 256 AND 16384);
+ALTER TABLE ct.model_connection_limits ALTER COLUMN max_response_bytes DROP DEFAULT;
 
 RESET ROLE;
 COMMIT;
