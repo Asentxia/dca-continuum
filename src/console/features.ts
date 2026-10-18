@@ -65,7 +65,7 @@ export function featureCatalogue(
     ),
     cognition: f(
       'not_configured',
-      'Read-only versioned binding; no model-change command.',
+      'Mock-tested / live test pending. A model connection grants no new permissions.',
     ),
     billing: f(
       'not_configured',

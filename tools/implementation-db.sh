@@ -51,3 +51,6 @@ fi
 if [ "$(psql -d ct_test -Atc "SELECT to_regclass('ct.e2_derivation_receipts') IS NOT NULL")" != t ]; then
  psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/022-e2-derived-proposals.sql > .artifacts/implementation/MIGRATION-022-e2-derived-proposals.log 2>&1
 fi
+if [ "$(psql -d ct_test -Atc "SELECT to_regclass('ct.model_connections') IS NOT NULL")" != t ]; then
+ psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/023-gemini-connections.sql > .artifacts/implementation/MIGRATION-023-gemini-connections.log 2>&1
+fi

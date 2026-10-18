@@ -132,6 +132,13 @@ export const CommandSchema = z
       'add_membership',
       'remove_membership',
       'record_mandate',
+      'create_model_connection',
+      'set_model_connection_limits',
+      'test_model_connection',
+      'select_model_connection_model',
+      'assign_model_connection',
+      'revoke_model_connection',
+      'try_vera_text',
     ]),
     target: Identifier,
     expected_version: z.number().int().nonnegative(),
@@ -220,6 +227,32 @@ export const CommandInputs = {
       organization: Identifier,
       title: z.string().min(1).max(200),
       body: z.string().min(1).max(8000),
+    })
+    .strict(),
+  create_model_connection: z
+    .object({ name: z.string().trim().min(1).max(200) })
+    .strict(),
+  set_model_connection_limits: z
+    .object({
+      maxRequests: z.number().int().min(1).max(20),
+      maxInputChars: z.number().int().min(1).max(4000),
+      maxOutputChars: z.number().int().min(1).max(4000),
+      maxConcurrent: z.literal(1),
+      timeoutMs: z.number().int().min(1000).max(10000),
+    })
+    .strict(),
+  test_model_connection: z.object({}).strict(),
+  select_model_connection_model: z
+    .object({
+      model: z.string().regex(/^models\/[A-Za-z0-9][A-Za-z0-9._:-]{0,120}$/),
+    })
+    .strict(),
+  assign_model_connection: z.object({ principal: Identifier }).strict(),
+  revoke_model_connection: z.object({}).strict(),
+  try_vera_text: z
+    .object({
+      principal: Identifier,
+      text: z.string().trim().min(1).max(4000),
     })
     .strict(),
 };

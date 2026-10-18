@@ -59,6 +59,7 @@ run VERA-CONSOLE-COMMANDS dist/tests/vera-console-commands.test.js
 run CONSOLE-RESTART dist/tests/console-restart.test.js
 run CONSOLE-MIGRATION-GUARD dist/tests/console-migration-guard.test.js
 run CONSOLE-SETUP-RECOVERY dist/tests/console-setup-recovery.test.js
+run MODEL-CONNECTION dist/tests/model-connection.test.js
 run VERA-PROFILE-BACKUP dist/tests/vera-profile-backup.test.js
 run FONT-NOTICES dist/tests/font-notices.test.js
 run REVIEW-REMEDIATION dist/tests/review-remediation.test.js

@@ -93,7 +93,7 @@ function migrationFiles() {
   const listed = script.match(/for m in ([^;]+);do/);
   assert.ok(listed);
   const files = listed[1].trim().split(/\s+/);
-  assert.equal(files.at(-1), '022-e2-derived-proposals.sql');
+  assert.equal(files.at(-1), '023-gemini-connections.sql');
   return files;
 }
 

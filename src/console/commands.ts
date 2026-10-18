@@ -17,6 +17,9 @@ import { OrganizationService } from '../regency/organization-service.js';
 import { MandateService } from '../regency/mandate-service.js';
 import { WorkCoordination } from './coordination.js';
 import { VeraService } from '../regency/vera-service.js';
+import { ModelConnectionService } from '../model-connection-service.js';
+import { rejectSecretFields } from '../model-credential.js';
+import type { GeminiTransport } from '../gemini-text.js';
 export class ConsoleCommands {
   constructor(
     private db: pg.Pool,
@@ -28,13 +31,34 @@ export class ConsoleCommands {
     private mandates = new MandateService(),
     private coordination = new WorkCoordination(db, fence),
     private veras = new VeraService(db, fence),
+    private models = new ModelConnectionService(),
   ) {
     if (this.mode === 'LOCAL_FIXTURE')
       assertLocalFixtures('local console commands profile');
   }
+  useTransport(transport: GeminiTransport) {
+    this.models.bind(transport);
+  }
+  async sealModelCredential(
+    actor: VerifiedIdentity,
+    connectionId: string,
+    apiKey: string,
+  ) {
+    if (this.mode !== 'LOCAL_FIXTURE')
+      throw Error('live commands qualification pending');
+    if (typeof connectionId !== 'string' || typeof apiKey !== 'string')
+      throw Error('model credential rejected');
+    return tx(this.db, (c) => this.models.seal(c, actor, connectionId, apiKey));
+  }
   async execute(actor: VerifiedIdentity, input: unknown) {
-    const cmd = CommandSchema.parse(input),
-      body = CommandInputs[cmd.kind].parse(cmd.input) as any;
+    rejectSecretFields(input);
+    const cmd = CommandSchema.parse(input);
+    let body: any;
+    try {
+      body = CommandInputs[cmd.kind].parse(cmd.input);
+    } catch {
+      throw Error('command input denied');
+    }
     if (this.mode !== 'LOCAL_FIXTURE')
       throw Error('live commands qualification pending');
     return tx(this.db, async (c) => {
@@ -151,6 +175,37 @@ export class ConsoleCommands {
     b: any,
   ): Promise<unknown> {
     switch (cmd.kind) {
+      case 'create_model_connection':
+        return this.models.create(c, a, cmd.target, b.name);
+      case 'set_model_connection_limits':
+        return this.models.setLimits(c, a, cmd.target, b);
+      case 'test_model_connection':
+        return this.models.test(c, a, cmd.target);
+      case 'select_model_connection_model':
+        return this.models.selectModel(c, a, cmd.target, b.model);
+      case 'assign_model_connection':
+        return this.models.assign(c, a, cmd.target, b.principal);
+      case 'revoke_model_connection':
+        return this.models.revoke(c, a, cmd.target);
+      case 'try_vera_text': {
+        const reserved = await this.models.reserveText(
+          c,
+          a,
+          cmd.target,
+          b.principal,
+          b.text,
+          cmd.idempotency_key,
+        );
+        return this.models.sendText(
+          c,
+          (await enrolled(c, a, true)).tenant,
+          cmd.target,
+          reserved.attempt,
+          reserved.model,
+          b.text,
+          reserved.timeoutMs,
+        );
+      }
       case 'create_vera': {
         if (cmd.expected_version !== 0) throw Error('new VERA profile version');
         const result = await this.veras.create(a, { id: cmd.target, ...b }, c);

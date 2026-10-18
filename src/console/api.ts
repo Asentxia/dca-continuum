@@ -67,6 +67,31 @@ export function consoleApi(
           200,
           await commands.lookup(actor, path.searchParams.get('key') ?? ''),
         );
+      if (req.method === 'POST' && path.pathname === '/model-credential') {
+        if (req.headers['content-type'] !== 'application/json')
+          return send(422, { error: 'JSON required' });
+        const input = await body(req);
+        const fields = input ? Object.keys(input).sort() : [];
+        if (
+          !input ||
+          fields.join(',') !== 'apiKey,connectionId' ||
+          typeof input.connectionId !== 'string' ||
+          typeof input.apiKey !== 'string'
+        )
+          return send(422, { error: 'Invalid credential request' });
+        try {
+          return send(
+            200,
+            await commands.sealModelCredential(
+              actor,
+              input.connectionId,
+              input.apiKey,
+            ),
+          );
+        } catch {
+          return send(403, { error: 'Credential denied' });
+        }
+      }
       if (req.method === 'POST' && path.pathname === '/command') {
         if (req.headers['content-type'] !== 'application/json')
           return send(422, { error: 'JSON required' });
