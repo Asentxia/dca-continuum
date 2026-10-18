@@ -1364,7 +1364,8 @@ def cmd(args,env=None):
 def sql(port,query,db='ct_dr'):
  return cmd(['psql','-h','127.0.0.1','-p',port,'-U','localtest','-d',db,'-v','ON_ERROR_STOP=1','-Atc',query])
 def describe_port(port):
- try: rows=open('/proc/net/tcp').read().splitlines()[1:]
+ try:
+  with open('/proc/net/tcp') as handle: rows=handle.read().splitlines()[1:]
  except OSError: return 'tcp owner unavailable'
  inodes=[]
  for row in rows:
@@ -1385,7 +1386,8 @@ def describe_port(port):
     try: target=os.readlink(fd_dir+'/'+fd)
     except OSError: continue
     if target!='socket:['+inode+']': continue
-    try: text=open('/proc/'+pid+'/cmdline','rb').read().replace(b'\x00',b' ').decode(errors='replace')[:240]
+    try:
+     with open('/proc/'+pid+'/cmdline','rb') as handle: text=handle.read().replace(b'\x00',b' ').decode(errors='replace')[:240]
     except OSError: text='unreadable cmdline'
     details.append('pid '+pid+' state '+state+' '+text)
  return '\n'.join(details) or 'inode not mapped; occupant not killed'
@@ -1452,7 +1454,7 @@ except Exception as e:
 finally:
  for sock in list(held.values()):
   try: sock.close()
-  except Exception: pass
+  except Exception as error: results.setdefault('cleanupErrors',[]).append(str(error))
  held.clear()
  for directory in list(reversed(started)):
   try:stop(directory)
