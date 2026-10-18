@@ -619,7 +619,11 @@ describe('tenant notice envelope', { concurrency: 1 }, () => {
   });
 
   test('a fresh console schema includes the notice tables', () => {
-    const script = readFileSync('tools/setup-console-db.sh', 'utf8');
+    const script = readFileSync('tools/apply-console-migrations.sh', 'utf8');
+    assert.match(
+      readFileSync('tools/setup-console-db.sh', 'utf8'),
+      /bash tools\/apply-console-migrations\.sh/,
+    );
     const listed = script.match(/for m in ([^;]+);do/);
     assert.ok(listed);
     const files = listed[1].trim().split(/\s+/);

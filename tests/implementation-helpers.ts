@@ -72,11 +72,11 @@ export async function fixture(prefix: string) {
     machine = new IdentityVerifier({ ...base, kind: 'machine' }, keys);
   for (const tenant of ['a', 'b']) {
     await gov.query(
-      'INSERT INTO ct.principals(tenant,id,epoch,generation) VALUES($1,$2,1,1)',
+      'INSERT INTO ct.principals(tenant,id,epoch,generation) VALUES($1,$2,1,1) ON CONFLICT DO NOTHING',
       [tenant, principal],
     );
     await gov.query(
-      "INSERT INTO ct.identities(id,issuer,subject,audience,kind,tenant,principal,domain_role) VALUES($1,$3,$1,$4,'user',$5,NULL,'owner'),($2,$3,$2,$4,'machine',$5,$6,'worker')",
+      "INSERT INTO ct.identities(id,issuer,subject,audience,kind,tenant,principal,domain_role) VALUES($1,$3,$1,$4,'user',$5,NULL,'owner'),($2,$3,$2,$4,'machine',$5,$6,'worker') ON CONFLICT DO NOTHING",
       [
         `${prefix}-owner-${tenant}`,
         `${prefix}-worker-${tenant}`,
@@ -167,23 +167,45 @@ export async function fixture(prefix: string) {
   for (const tenant of ['a', 'b']) {
     const organization = `${prefix}-org`;
     const mandate = `${prefix}-mandate`;
+    const existing = (
+      await authDb.query(
+        'SELECT current_version FROM ct.mandates WHERE tenant=$1 AND organization=$2 AND id=$3',
+        [tenant, organization, mandate],
+      )
+    ).rows[0];
+    if (existing) {
+      admission[tenant] = {
+        organization,
+        mandate,
+        mandateVersion: Number(existing.current_version),
+      };
+      continue;
+    }
     await tx(authDb, async (c) => {
-      await organizations.create(
-        c,
-        tenant,
-        `${prefix}-owner-${tenant}`,
-        organization,
-        prefix + ' organization',
-      );
-      await organizations.addMembership(
-        c,
-        tenant,
-        organization,
-        'vera',
-        principal,
-        'steward',
-        false,
-      );
+      const org = (
+        await c.query(
+          'SELECT 1 FROM ct.organizations WHERE tenant=$1 AND id=$2',
+          [tenant, organization],
+        )
+      ).rows[0];
+      if (!org) {
+        await organizations.create(
+          c,
+          tenant,
+          `${prefix}-owner-${tenant}`,
+          organization,
+          prefix + ' organization',
+        );
+        await organizations.addMembership(
+          c,
+          tenant,
+          organization,
+          'vera',
+          principal,
+          'steward',
+          false,
+        );
+      }
       const recorded = await mandateService.record(
         c,
         tenant,
