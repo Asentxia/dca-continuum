@@ -643,6 +643,9 @@ export function ConsoleApp({
       throw Error(outcome === 'UNCONFIRMED' ? 'REQUEST_UNCONFIRMED' : outcome);
     return lastReceipt.current;
   }
+  async function issueVoid(value: HumanCommand) {
+    await issueForm(value);
+  }
   async function checkStoredOutcome() {
     const held = pendingCommand.current;
     if (
@@ -1159,7 +1162,7 @@ export function ConsoleApp({
                 <CreateProjectForm
                   canAct={allowed}
                   busy={busy}
-                  onCommand={issueForm}
+                  onCommand={issueVoid}
                   onClose={closeForm}
                 />
               ) : creating === 'vera' || creating === 'edit_vera' ? (
@@ -1168,7 +1171,7 @@ export function ConsoleApp({
                   item={creating === 'edit_vera' ? detail?.item : undefined}
                   canAct={creating === 'edit_vera' ? detailAllowed : allowed}
                   busy={busy}
-                  onCommand={issueForm}
+                  onCommand={issueVoid}
                   onClose={closeForm}
                 />
               ) : creating === 'link_project' ? (
@@ -1179,7 +1182,7 @@ export function ConsoleApp({
                     contextDeadline={detail.at + detail.ttl}
                     canAct={detailAllowed}
                     busy={busy}
-                    onCommand={issueForm}
+                    onCommand={issueVoid}
                     onClose={closeForm}
                   />
                 ) : (
