@@ -54,3 +54,6 @@ fi
 if [ "$(psql -d ct_test -Atc "SELECT to_regclass('ct.model_connections') IS NOT NULL")" != t ]; then
  psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/023-gemini-connections.sql > .artifacts/implementation/MIGRATION-023-gemini-connections.log 2>&1
 fi
+if [ "$(psql -d ct_test -Atc "SELECT 1 FROM information_schema.columns WHERE table_schema='ct' AND table_name='model_text_attempts' AND column_name='updated_at'")" != 1 ]; then
+ psql -v ON_ERROR_STOP=1 -d ct_test -f migrations/024-model-attempt-outcome.sql > .artifacts/implementation/MIGRATION-024-model-attempt-outcome.log 2>&1
+fi

@@ -132,6 +132,18 @@ before(async () => {
     ],
     { encoding: 'utf8' },
   );
+  spawnSync(
+    'psql',
+    [
+      '-d',
+      'ct_test',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-f',
+      'migrations/024-model-attempt-outcome.sql',
+    ],
+    { encoding: 'utf8' },
+  );
   f = await fixture(prefix);
   writeDb = pool('ct_authority_api');
   commands = new ConsoleCommands(
@@ -166,7 +178,8 @@ test('an existing database keeps tasks and VERA profiles when the connection mig
   ).match(/for m in ([^;]+);do/);
   assert.ok(listed);
   const files = listed[1].trim().split(/\s+/);
-  assert.equal(files.at(-1), '023-gemini-connections.sql');
+  assert.equal(files.at(-2), '023-gemini-connections.sql');
+  assert.equal(files.at(-1), '024-model-attempt-outcome.sql');
   for (const file of files) {
     if (file === '019-task-mandate-admission.sql') break;
     assert.equal(psql(['-f', `migrations/${file}`]).status, 0, file);
@@ -184,7 +197,12 @@ test('an existing database keeps tasks and VERA profiles when the connection mig
   let apply = false;
   for (const file of files) {
     if (file === '019-task-mandate-admission.sql') apply = true;
-    if (!apply || file === '023-gemini-connections.sql') continue;
+    if (
+      !apply ||
+      file === '023-gemini-connections.sql' ||
+      file === '024-model-attempt-outcome.sql'
+    )
+      continue;
     assert.equal(psql(['-f', `migrations/${file}`]).status, 0, file);
   }
   assert.equal(
@@ -203,6 +221,26 @@ test('an existing database keeps tasks and VERA profiles when the connection mig
   assert.match(before, /kept-task/);
   assert.match(before, /Kept/);
   assert.equal(psql(['-f', 'migrations/023-gemini-connections.sql']).status, 0);
+  assert.equal(
+    psql(['-c', 'ALTER TABLE ct.model_text_attempts DROP COLUMN updated_at'])
+      .status,
+    0,
+  );
+  assert.equal(
+    psql(['-f', 'migrations/024-model-attempt-outcome.sql']).status,
+    0,
+  );
+  assert.equal(
+    psql(['-f', 'migrations/024-model-attempt-outcome.sql']).status,
+    0,
+  );
+  assert.match(
+    psql([
+      '-Atc',
+      "SELECT column_name FROM information_schema.columns WHERE table_schema='ct' AND table_name='model_text_attempts' AND column_name='updated_at'",
+    ]).stdout,
+    /updated_at/,
+  );
   const afterRows = psql([
     '-Atc',
     `SELECT id||objective||revision::text FROM ct.tasks ORDER BY id;
@@ -1039,4 +1077,92 @@ test('stale bindings, locked limits, and stranded attempts stay honest', async (
   assert.equal(calls, mark + 1);
   assert.equal((await attemptState(stuck))?.state, 'UNCERTAIN');
   assert.equal((await attemptState(stuck))?.outcome, 'POSSIBLY_SENT');
+});
+
+test('a terminal attempt closes its pending command', async () => {
+  const id = prefix + '-close';
+  const { owner, vera } = await prepare(id);
+  const before = calls;
+  let release: () => void = () => undefined;
+  mock.gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const idem = 'close-' + prefix;
+  const first = commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Gone' }, idem),
+  );
+  try {
+    for (let i = 0; i < 50; i++) {
+      if ((await attemptState(idem))?.state === 'SENDING') break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal((await attemptState(idem))?.state, 'SENDING');
+    assert.equal(
+      (
+        await admin.query(
+          `UPDATE ct.model_text_attempts
+           SET state='UNCERTAIN', outcome='POSSIBLY_SENT', may_still_complete=true
+           WHERE tenant='a' AND idempotency_key=$1`,
+          [idem],
+        )
+      ).rowCount,
+      1,
+    );
+    await admin.query(
+      `UPDATE ct.model_connection_limits
+       SET requests_reserved=requests_reserved-1,
+           requests_settled=requests_settled+1,
+           concurrent_requests=concurrent_requests-1
+       WHERE tenant='a' AND connection_id=$1`,
+      [id],
+    );
+    const retry = await commands.execute(
+      owner,
+      command('try_vera_text', id, { principal: vera, text: 'Gone' }, idem),
+    );
+    assert.equal(retry.status, 'APPLIED');
+    assert.equal(
+      (retry.result as { outcome?: string }).outcome,
+      'POSSIBLY_SENT',
+    );
+    assert.equal(
+      (retry.result as { mayStillComplete?: boolean }).mayStillComplete,
+      true,
+    );
+  } finally {
+    release();
+    mock.gate = null;
+  }
+  const finished = await first;
+  assert.equal(finished.status, 'APPLIED');
+  assert.equal(calls, before + 1);
+  const blocked = 'blocked-' + prefix;
+  commands.beforeAdmit = async () => {
+    await admin.query(
+      `UPDATE ct.model_text_attempts
+       SET state='BLOCKED', outcome='REVOKED', may_still_complete=false
+       WHERE tenant='a' AND idempotency_key=$1`,
+      [blocked],
+    );
+    throw Error('stopped before send');
+  };
+  try {
+    await assert.rejects(
+      commands.execute(
+        owner,
+        command('try_vera_text', id, { principal: vera, text: 'Stop' }, blocked),
+      ),
+    );
+  } finally {
+    commands.beforeAdmit = null;
+  }
+  const closed = await commands.execute(
+    owner,
+    command('try_vera_text', id, { principal: vera, text: 'Stop' }, blocked),
+  );
+  assert.equal(closed.status, 'APPLIED');
+  assert.equal((closed.result as { outcome?: string }).outcome, 'REVOKED');
+  assert.equal((closed.result as { sent?: boolean }).sent, false);
+  assert.equal(calls, before + 1);
 });

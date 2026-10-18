@@ -581,6 +581,13 @@ export class ModelConnectionService {
       message: 'This request may already have been sent. It was not retried.',
     };
   }
+  settledResult(attempt: {
+    state?: string;
+    outcome?: string;
+    response_text?: string;
+  }) {
+    return this.stored(attempt);
+  }
   private stored(
     attempt:
       | { state?: string; outcome?: string; response_text?: string }

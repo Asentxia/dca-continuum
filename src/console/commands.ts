@@ -90,7 +90,7 @@ export class ConsoleCommands {
         if (previous.status === 'PENDING') {
           const attempt = (
             await c.query(
-              'SELECT id, state FROM ct.model_text_attempts WHERE tenant=$1 AND idempotency_key=$2',
+              'SELECT id, state, outcome, response_text FROM ct.model_text_attempts WHERE tenant=$1 AND idempotency_key=$2',
               [i.tenant, cmd.idempotency_key],
             )
           ).rows[0];
@@ -109,6 +109,22 @@ export class ConsoleCommands {
               tenant: i.tenant,
               commandId: previous.id,
             };
+          }
+          if (attempt) {
+            const done = await this.finishCommand(
+              c,
+              i.tenant,
+              previous.id,
+              this.models.settledResult(attempt),
+            );
+            if (done.fresh)
+              await append(c, i.tenant, 'HUMAN_COMMAND_APPLIED', {
+                command: previous.id,
+                kind: cmd.kind,
+                target: cmd.target,
+                externalEffect: false,
+              });
+            return receipt(done.row, true);
           }
         }
         return receipt(previous, true);
